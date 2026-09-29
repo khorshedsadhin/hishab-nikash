@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="bn" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Hishab: a monthly budget planner and daily spending log.">
+<meta name="theme-color" content="#0f1720">
+<title>হিসাব · Hishab</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@300;400;500;600;700&family=Tiro+Bangla&display=swap" rel="stylesheet">
+<script>
+  try {
+    if (localStorage.getItem('hishab-theme') === 'light') document.documentElement.classList.remove('dark');
+  } catch (e) {}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

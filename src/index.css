@@ -1,0 +1,121 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  --background: #f5f3ee;
+  --foreground: #1b232c;
+  --card: #ffffff;
+  --card-foreground: #1b232c;
+  --popover: #ffffff;
+  --popover-foreground: #1b232c;
+  --primary: #c47a12;
+  --primary-foreground: #ffffff;
+  --secondary: #ece8df;
+  --secondary-foreground: #1b232c;
+  --muted: #ece8df;
+  --muted-foreground: #5d6975;
+  --accent: #ece8df;
+  --accent-foreground: #1b232c;
+  --destructive: #c2462f;
+  --border: #e0dbd0;
+  --input: #d6d0c3;
+  --ring: #c47a12;
+  --sunk: #f9f8f5;
+  --sidebar: #ffffff;
+  --success: #2c8a5f;
+  --warning: #c47a12;
+  --danger: #c2462f;
+  --cat-needs: #2c8a5f;
+  --cat-wants: #c47a12;
+  --cat-culture: #3f72b8;
+  --cat-unexpected: #c2462f;
+}
+
+.dark {
+  --background: #0f1720;
+  --foreground: #ede7db;
+  --card: #17212c;
+  --card-foreground: #ede7db;
+  --popover: #17212c;
+  --popover-foreground: #ede7db;
+  --primary: #f0a93b;
+  --primary-foreground: #0b1219;
+  --secondary: #1c2733;
+  --secondary-foreground: #ede7db;
+  --muted: #1c2733;
+  --muted-foreground: #93a1af;
+  --accent: #1c2733;
+  --accent-foreground: #ede7db;
+  --destructive: #e06a54;
+  --border: #24313e;
+  --input: #2b3947;
+  --ring: #f0a93b;
+  --sunk: #0b1219;
+  --sidebar: #121b24;
+  --success: #63b98f;
+  --warning: #f0a93b;
+  --danger: #e06a54;
+  --cat-needs: #4ea57c;
+  --cat-wants: #c7851c;
+  --cat-culture: #5a88c6;
+  --cat-unexpected: #d85c46;
+}
+
+@theme inline {
+  --font-sans: 'Anek Bangla', 'Nirmala UI', 'Noto Sans Bengali', sans-serif;
+  --font-fig: 'Tiro Bangla', 'Nirmala UI', serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sunk: var(--sunk);
+  --color-sidebar: var(--sidebar);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    line-height: 1.55;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Past days with nothing written: striped so a blank day never reads as a zero-spend day. */
+.unlogged-stripes {
+  background: repeating-linear-gradient(to bottom, var(--border) 0 2px, transparent 2px 5px);
+}

@@ -4,6 +4,12 @@ A monthly budget planner and daily spending log with a Bangla interface. It is b
 
 Everything runs in the browser. There is no backend and no account. Data is saved in `localStorage`.
 
+## Screenshots
+
+![Today dashboard](docs/screenshots/today.png)
+
+![Plan page](docs/screenshots/plan.png)
+
 ## Features
 
 - **Today dashboard:** shows money left, today's and this week's spending against their allowance, and how much is free versus tied up in fixed costs. A daily spending chart marks days you haven't logged.

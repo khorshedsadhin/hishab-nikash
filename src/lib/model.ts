@@ -35,6 +35,7 @@ export interface Month {
   cashStart: number | null;
   checks: Check[];
   loggedDays: string[];
+  locked: boolean;
 }
 
 export interface State {
@@ -70,7 +71,8 @@ export function makeNewMonth(fromMonth: Month): Month {
     saved: null,
     cashStart: null,
     checks: [],
-    loggedDays: []
+    loggedDays: [],
+    locked: false
   };
 }
 
@@ -88,7 +90,8 @@ export function blankMonth(): Month {
     saved: null,
     cashStart: null,
     checks: [],
-    loggedDays: []
+    loggedDays: [],
+    locked: false
   };
 }
 
@@ -111,6 +114,7 @@ export function migrate(s: any): State {
     if (typeof m.cashStart !== 'number') m.cashStart = null;
     if (!Array.isArray(m.checks)) m.checks = [];
     if (!Array.isArray(m.loggedDays)) m.loggedDays = [];
+    if (typeof m.locked !== 'boolean') m.locked = false;
     m.log.forEach((e: LogEntry) => {
       if (e.lineId === undefined) e.lineId = null;
       if (m.loggedDays.indexOf(e.date) < 0) m.loggedDays.push(e.date);

@@ -161,6 +161,38 @@ describe('months', () => {
     expect(m.saved).toBeNull();
     expect(m.cashStart).toBeNull();
     expect(m.reflection).toBe('');
+    expect(m.locked).toBe(false);
+  });
+});
+
+describe('lock', () => {
+  function locked(): State {
+    const m = september();
+    m.locked = true;
+    return { activeMonth: '2026-09', months: { '2026-09': m } };
+  }
+
+  it('refuses plan edits while locked', () => {
+    const state = locked();
+    expect(reducer(state, { type: 'updateLine', cat: 'needs', id: 'A', amount: 9999 })).toBe(state);
+    expect(reducer(state, { type: 'setIncome', value: 1 })).toBe(state);
+  });
+
+  it('still takes spending while locked', () => {
+    const next = reducer(locked(), { type: 'addSpend', date: '2026-09-16', cat: 'wants', amount: 50, pick: '', name: 'entry-4' });
+    expect(next.months['2026-09'].log.at(-1)!).toMatchObject({ name: 'entry-4', amount: 50 });
+  });
+
+  it('takes plan edits again once unlocked', () => {
+    const open = reducer(locked(), { type: 'setLocked', value: false });
+    expect(open.months['2026-09'].locked).toBe(false);
+    expect(reducer(open, { type: 'setIncome', value: 1 }).months['2026-09'].income).toBe(1);
+  });
+
+  it('opens a new month unlocked', () => {
+    const m = september();
+    m.locked = true;
+    expect(makeNewMonth(m).locked).toBe(false);
   });
 });
 

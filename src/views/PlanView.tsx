@@ -1,5 +1,9 @@
 import { useState, type CSSProperties } from 'react';
-import { ArrowDownRight, ArrowUpRight, Plus, Repeat, X } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Lock, LockOpen, Plus, Repeat, X } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,17 +19,36 @@ import { useStore } from '@/state/store';
 export function PlanView({ m, d }: { m: Month; d: Derived }) {
   const { state, dispatch } = useStore();
   const [newLineId, setNewLineId] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const locked = m.locked;
+  const nudge = !locked && !d.isFuture;
 
   return (
     <div className="grid gap-4 md:gap-6">
+      <div className={cn(
+        'flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm',
+        nudge && 'border-danger/40 bg-danger/10'
+      )}>
+        {locked ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+        {locked ? 'প্ল্যান লক করা আছে' : nudge ? 'মাস শুরু হয়ে গেছে — প্ল্যান লক করে দাও' : 'প্ল্যান এখনো খোলা'}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => (locked ? setAsking(true) : dispatch({ type: 'setLocked', value: true }))}
+        >
+          {locked ? 'আনলক করো' : 'লক করো'}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4">
         <Card className="gap-2 px-5 py-4">
           <label htmlFor="income" className="text-sm text-muted-foreground">মাসের আয়</label>
-          <NumberInput id="income" value={m.income} onValue={(v) => dispatch({ type: 'setIncome', value: v ?? 0 })} className="font-fig text-lg" />
+          <NumberInput id="income" value={m.income} disabled={locked} onValue={(v) => dispatch({ type: 'setIncome', value: v ?? 0 })} className="font-fig text-lg" />
         </Card>
         <Card className="gap-2 px-5 py-4">
           <label htmlFor="savings" className="text-sm text-muted-foreground">যা সরিয়ে রাখবে</label>
-          <NumberInput id="savings" value={m.savingsTarget} onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })} className="font-fig text-lg" />
+          <NumberInput id="savings" value={m.savingsTarget} disabled={locked} onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })} className="font-fig text-lg" />
         </Card>
         <KpiCard label="খরচযোগ্য" className="col-span-2 sm:col-span-1" value={<span className="text-primary">{money(d.spendable)}</span>} />
       </div>
@@ -72,6 +95,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                         <Input
                           value={l.name}
                           placeholder="কীসের খরচ"
+                          disabled={locked}
                           autoFocus={l.id === newLineId}
                           onChange={(e) => dispatch({ type: 'updateLine', cat: c.key, id: l.id, name: e.target.value })}
                           className="h-8 min-w-0 basis-full border-transparent bg-transparent shadow-none focus-visible:border-(--ca) sm:flex-1 sm:basis-0 dark:bg-transparent"
@@ -84,12 +108,14 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                           )}
                           <NumberInput
                             value={l.amount}
+                            disabled={locked}
                             onValue={(v) => dispatch({ type: 'updateLine', cat: c.key, id: l.id, amount: v ?? 0 })}
                             aria-label="টাকা"
                             className="h-8 w-20 shrink-0 border-transparent bg-transparent text-right font-fig shadow-none focus-visible:border-(--ca) dark:bg-transparent"
                           />
                           <button
                             type="button"
+                            disabled={locked}
                             onClick={() => dispatch({ type: 'toggleRepeat', cat: c.key, id: l.id })}
                             className={cn(
                               'flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs whitespace-nowrap',
@@ -106,6 +132,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                             size="icon-xs"
                             className="text-muted-foreground hover:text-danger"
                             aria-label="মুছে ফেলো"
+                            disabled={locked}
                             onClick={() => dispatch({ type: 'deleteLine', cat: c.key, id: l.id })}
                           >
                             <X />
@@ -119,18 +146,20 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                       লাইন ছাড়া <b className="font-fig font-normal text-foreground">{money(cat.unlinked)}</b>
                     </p>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const id = uid();
-                      setNewLineId(id);
-                      dispatch({ type: 'addLine', cat: c.key, id });
-                    }}
-                    className="flex w-full items-center gap-1.5 px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  >
-                    <Plus className="size-4" />
-                    লাইন যোগ করো
-                  </button>
+                  {!locked && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const id = uid();
+                        setNewLineId(id);
+                        dispatch({ type: 'addLine', cat: c.key, id });
+                      }}
+                      className="flex w-full items-center gap-1.5 px-4 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    >
+                      <Plus className="size-4" />
+                      লাইন যোগ করো
+                    </button>
+                  )}
                 </div>
               </Card>
             );
@@ -160,6 +189,23 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
           </Card>
         </div>
       </div>
+
+      <AlertDialog open={asking} onOpenChange={setAsking}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>প্ল্যান আনলক করবে?</AlertDialogTitle>
+            <AlertDialogDescription>
+              মাস চলাকালীন প্ল্যান বদলালে হিসাব আর প্ল্যানের সাথে মিলবে না। সত্যিই দরকার হলে বদলাও।
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>না</AlertDialogCancel>
+            <AlertDialogAction onClick={() => dispatch({ type: 'setLocked', value: false })}>
+              হ্যাঁ, আনলক করো
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

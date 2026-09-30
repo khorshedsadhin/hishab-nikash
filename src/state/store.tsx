@@ -19,9 +19,13 @@ export type Action =
   | { type: 'updateLine'; cat: string; id: string; name?: string; amount?: number }
   | { type: 'deleteLine'; cat: string; id: string }
   | { type: 'toggleRepeat'; cat: string; id: string }
+  | { type: 'setLocked'; value: boolean }
   | { type: 'selectMonth'; key: string }
   | { type: 'openNextMonth' }
   | { type: 'importState'; state: State };
+
+/* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
+const PLAN_EDITS = ['setIncome', 'setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
 
 function markLogged(m: Month, date: string) {
   if (!m.loggedDays) m.loggedDays = [];
@@ -33,6 +37,7 @@ export function reducer(prev: State, action: Action): State {
 
   const state: State = structuredClone(prev);
   const m = state.months[state.activeMonth];
+  if (m.locked && PLAN_EDITS.indexOf(action.type) >= 0) return prev;
 
   switch (action.type) {
     case 'addSpend': {
@@ -112,6 +117,9 @@ export function reducer(prev: State, action: Action): State {
       if (line) line.repeat = !line.repeat;
       break;
     }
+    case 'setLocked':
+      m.locked = action.value;
+      break;
     case 'selectMonth':
       state.activeMonth = action.key;
       break;

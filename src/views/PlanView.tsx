@@ -91,14 +91,14 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                   {(m.budget[c.key] || []).map((l) => {
                     const spent = d.lineActual[l.id] || 0;
                     return (
-                      <div key={l.id} className="flex flex-wrap items-center gap-1.5 px-2 py-1">
+                      <div key={l.id} className="flex items-center gap-1.5 px-2 py-1">
                         <Input
                           value={l.name}
                           placeholder="কীসের খরচ"
                           disabled={locked}
                           autoFocus={l.id === newLineId}
                           onChange={(e) => dispatch({ type: 'updateLine', cat: c.key, id: l.id, name: e.target.value })}
-                          className="h-8 min-w-0 basis-full border-transparent bg-transparent shadow-none focus-visible:border-(--ca) sm:flex-1 sm:basis-0 dark:bg-transparent"
+                          className="h-8 min-w-0 flex-1 basis-0 border-transparent bg-transparent shadow-none focus-visible:border-(--ca) dark:bg-transparent"
                         />
                         <div className="ml-auto flex items-center gap-1.5">
                           {spent > 0 && (

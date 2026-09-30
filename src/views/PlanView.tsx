@@ -118,7 +118,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                             disabled={locked}
                             onClick={() => dispatch({ type: 'toggleRepeat', cat: c.key, id: l.id })}
                             className={cn(
-                              'flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs whitespace-nowrap',
+                              'flex w-24 shrink-0 items-center justify-center gap-1 rounded-full border py-0.5 text-xs whitespace-nowrap',
                               l.repeat
                                 ? 'border-(--ca) bg-[color-mix(in_srgb,var(--ca)_16%,transparent)] text-foreground'
                                 : 'text-muted-foreground'

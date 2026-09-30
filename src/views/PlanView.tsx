@@ -127,16 +127,17 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                             {l.repeat && <Repeat className="size-3" />}
                             {l.repeat ? 'প্রতি মাসে' : 'এই মাসে'}
                           </button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="text-muted-foreground hover:text-danger"
-                            aria-label="মুছে ফেলো"
-                            disabled={locked}
-                            onClick={() => dispatch({ type: 'deleteLine', cat: c.key, id: l.id })}
-                          >
-                            <X />
-                          </Button>
+                          {!locked && (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="text-muted-foreground hover:text-danger"
+                              aria-label="মুছে ফেলো"
+                              onClick={() => dispatch({ type: 'deleteLine', cat: c.key, id: l.id })}
+                            >
+                              <X />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     );

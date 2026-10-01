@@ -17,14 +17,14 @@ export function Topbar({ view }: { view: View }) {
 
   return (
     <header className="sticky top-0 z-10 border-b bg-background/85 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 md:px-8">
+      <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-3 md:px-8">
         <div className="md:hidden">
-          <Brand />
+          <Brand iconOnly />
         </div>
         <h1 className="hidden text-xl font-semibold md:block">{VIEWS.find((v) => v.key === view)!.label}</h1>
         <div className="ml-auto flex items-center gap-2">
           <Select value={state.activeMonth} onValueChange={(key) => dispatch({ type: 'selectMonth', key })}>
-            <SelectTrigger aria-label="মাস" className="w-40">
+            <SelectTrigger aria-label="মাস" className="w-auto sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

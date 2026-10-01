@@ -4,13 +4,13 @@ import { AccountButton } from './AccountButton';
 import { ThemeToggle } from './ThemeToggle';
 import { VIEWS, type View } from './nav';
 
-export function Brand() {
+export function Brand({ iconOnly }: { iconOnly?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
         <Wallet className="size-4" />
       </span>
-      <span className="font-fig text-xl tracking-wide">হিসাব</span>
+      {!iconOnly && <span className="font-fig text-xl tracking-wide">হিসাব</span>}
     </div>
   );
 }

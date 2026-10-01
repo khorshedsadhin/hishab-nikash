@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { AccountCard } from '@/components/AccountCard';
 import { KpiCard } from '@/components/KpiCard';
 import { Ledger } from '@/components/Ledger';
 import { NumberInput } from '@/components/NumberInput';
@@ -49,7 +48,6 @@ export function MonthView({ m, d }: { m: Month; d: Derived }) {
               <Reflection m={m} />
             </CardContent>
           </Card>
-          <AccountCard />
           <Backup />
           <DeleteMonth />
         </div>

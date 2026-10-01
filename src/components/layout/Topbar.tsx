@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { nextMonthKey } from '@/lib/dates';
 import { monthLabel } from '@/lib/format';
 import { useStore } from '@/state/store';
+import { AccountButton } from './AccountButton';
 import { Brand } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
 import { VIEWS, type View } from './nav';
@@ -41,7 +42,8 @@ export function Topbar({ view }: { view: View }) {
               নতুন মাসে শুধু ‘প্রতি মাসে’ লাইনগুলো যাবে, খরচের লগ যাবে না।
             </TooltipContent>
           </Tooltip>
-          <div className="md:hidden">
+          <div className="flex md:hidden">
+            <AccountButton />
             <ThemeToggle />
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { Wallet } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AccountButton } from './AccountButton';
 import { ThemeToggle } from './ThemeToggle';
 import { VIEWS, type View } from './nav';
 
@@ -39,7 +40,8 @@ export function Sidebar({ view, onView }: { view: View; onView: (v: View) => voi
           </button>
         ))}
       </nav>
-      <div className="mt-auto">
+      <div className="mt-auto grid gap-1">
+        <AccountButton withLabel />
         <ThemeToggle withLabel />
       </div>
     </aside>

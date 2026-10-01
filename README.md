@@ -12,6 +12,8 @@ The app runs in the browser and saves data in `localStorage`. An optional accoun
 
 ![Month page](docs/screenshots/month.png)
 
+![Account popup](docs/screenshots/account.png)
+
 ## Features
 
 - **Today dashboard:** shows money left, today's and this week's spending against their allowance, and how much is free versus tied up in fixed costs. A daily spending chart marks days you haven't logged.

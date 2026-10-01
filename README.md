@@ -2,7 +2,7 @@
 
 A monthly budget planner and daily spending log with a Bangla interface. It is built on the Japanese *kakeibo* method. Savings come out first, and the rest is split across four categories. You write down what you spend each day and check your cash against the ledger.
 
-Everything runs in the browser. There is no backend and no account. Data is saved in `localStorage`.
+The app runs in the browser and saves data in `localStorage`. An optional account (username and password) syncs data to a Postgres database.
 
 ## Screenshots
 
@@ -19,6 +19,7 @@ Everything runs in the browser. There is no backend and no account. Data is save
 - **Reconcile:** enter the cash you actually have. Any gap against the ledger can be logged as one unknown expense.
 - **Month review:** total saved, a recap of the month, and a note for next month.
 - **Backup:** export all your data to JSON, and import it again.
+- **Account sync:** sign up with a username and password to keep data on the server and use it on other devices. There is no password reset.
 - Light and dark themes, with a phone layout.
 
 ## Tech stack
@@ -37,9 +38,13 @@ npm run build    # type-check and build into dist/
 npm run preview  # serve the production build
 ```
 
+Account sync needs the API in `api/`, which runs as Vercel functions against Neon Postgres. Create the tables with `db/schema.sql`, set `DATABASE_URL`, and run `npx vercel dev` to serve the app and API together.
+
 ## Project structure
 
 ```
+api/            Vercel functions: signup, login, logout, month sync
+db/             Postgres schema
 src/
   lib/          pure logic: dates, formatting, the money model, storage
   state/        reducer and context holding the app state
@@ -52,5 +57,6 @@ All money calculations live in `src/lib/model.ts` (`derive`), and the tests are 
 ## Data
 
 - Saved in `localStorage` under the key `hishab`. The theme choice is saved under `hishab-theme`.
-- Data stays in the browser it was entered in. Clearing site data deletes it.
+- Without an account, data stays in the browser it was entered in. Clearing site data deletes it.
+- With an account, each month is gzipped in the browser and stored as one row in Postgres. The last edit to a month wins. Sync state is kept under `hishab-sync`.
 - Export a backup regularly: মাস → ব্যাকআপ → ব্যাকআপ নামাও.

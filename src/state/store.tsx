@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
-import { expectedAt, makeNewMonth, migrate, type Month, type State } from '@/lib/model';
+import { blankMonth, expectedAt, makeNewMonth, migrate, type Month, type State } from '@/lib/model';
 import { load, save } from '@/lib/storage';
+import { startSync, trackState } from '@/lib/sync';
 
 export type Action =
   | { type: 'addSpend'; date: string; cat: string; amount: number; pick: string; name: string }
@@ -22,10 +23,25 @@ export type Action =
   | { type: 'setLocked'; value: boolean }
   | { type: 'selectMonth'; key: string }
   | { type: 'openNextMonth' }
-  | { type: 'importState'; state: State };
+  | { type: 'importState'; state: State }
+  | { type: 'deleteMonth' }
+  | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
 /* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
 const PLAN_EDITS = ['setIncome', 'setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
+
+/* The app always needs an active month, so dropping the last one leaves a blank current month. */
+function dropMonth(state: State, key: string) {
+  delete state.months[key];
+  if (state.activeMonth !== key) return;
+  const keys = Object.keys(state.months).sort();
+  if (keys.length) {
+    state.activeMonth = keys[keys.length - 1];
+  } else {
+    state.activeMonth = todayISO().slice(0, 7);
+    state.months[state.activeMonth] = blankMonth();
+  }
+}
 
 function markLogged(m: Month, date: string) {
   if (!m.loggedDays) m.loggedDays = [];
@@ -34,6 +50,15 @@ function markLogged(m: Month, date: string) {
 
 export function reducer(prev: State, action: Action): State {
   if (action.type === 'importState') return migrate(action.state);
+  if (action.type === 'mergeRemote') {
+    const state: State = { ...prev, months: { ...prev.months } };
+    for (const k in action.months) {
+      const month = action.months[k];
+      if (month) state.months[k] = month;
+      else dropMonth(state, k);
+    }
+    return state;
+  }
 
   const state: State = structuredClone(prev);
   const m = state.months[state.activeMonth];
@@ -123,6 +148,9 @@ export function reducer(prev: State, action: Action): State {
     case 'selectMonth':
       state.activeMonth = action.key;
       break;
+    case 'deleteMonth':
+      dropMonth(state, state.activeMonth);
+      break;
     case 'openNextMonth': {
       const nextKey = nextMonthKey(state.activeMonth);
       if (!state.months[nextKey]) state.months[nextKey] = makeNewMonth(m);
@@ -139,9 +167,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, load);
   const loaded = useRef(state);
 
+  useEffect(() => startSync(loaded.current, (months) => dispatch({ type: 'mergeRemote', months })), []);
+
   /* Don't write on first render: an unreadable save stays on disk until the user changes something. */
   useEffect(() => {
     if (state !== loaded.current) save(state);
+    trackState(state);
   }, [state]);
 
   return <StoreContext.Provider value={{ state, dispatch }}>{children}</StoreContext.Provider>;

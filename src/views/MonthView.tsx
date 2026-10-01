@@ -1,14 +1,15 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Download, PiggyBank, Upload, X } from 'lucide-react';
+import { Download, PiggyBank, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AccountCard } from '@/components/AccountCard';
 import { KpiCard } from '@/components/KpiCard';
 import { Ledger } from '@/components/Ledger';
 import { NumberInput } from '@/components/NumberInput';
@@ -48,7 +49,9 @@ export function MonthView({ m, d }: { m: Month; d: Derived }) {
               <Reflection m={m} />
             </CardContent>
           </Card>
+          <AccountCard />
           <Backup />
+          <DeleteMonth />
         </div>
       </div>
 
@@ -262,6 +265,50 @@ function Backup() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </Card>
+  );
+}
+
+function DeleteMonth() {
+  const { state, dispatch } = useStore();
+  const label = monthLabel(state.activeMonth);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>মাস মুছে ফেলো</CardTitle>
+        <CardDescription>{label}র পরিকল্পনা, খরচ, মিলানো সব মুছে যাবে।</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive">
+              <Trash2 />
+              এই মাস মুছে ফেলো
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{label} মুছে ফেলবে?</AlertDialogTitle>
+              <AlertDialogDescription>
+                এই মাসের সব হিসাব মুছে যাবে, ফেরত আনা যাবে না। পরের মাসে ‘আগের মাস থেকে’ আসা টাকাও আর আসবে না।
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>না</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() => {
+                  dispatch({ type: 'deleteMonth' });
+                  toast.success(label + ' মুছে ফেলা হয়েছে।');
+                }}
+              >
+                হ্যাঁ, মুছে ফেলো
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </CardContent>
     </Card>
   );
 }

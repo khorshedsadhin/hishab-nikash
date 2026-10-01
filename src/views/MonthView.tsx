@@ -109,6 +109,7 @@ function Reconcile({ m }: { m: Month }) {
             <NumberInput
               nullable
               value={m.cashStart}
+              disabled={m.locked}
               placeholder={suggest == null ? undefined : String(suggest)}
               onValue={(v) => dispatch({ type: 'setCashStart', value: v })}
               className="font-fig text-foreground"

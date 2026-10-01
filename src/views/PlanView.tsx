@@ -56,6 +56,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
             id="cash-start"
             nullable
             value={m.cashStart}
+            disabled={locked}
             placeholder={String(carryInto(state, state.activeMonth))}
             onValue={(v) => dispatch({ type: 'setCashStart', value: v })}
             className="font-fig text-lg"

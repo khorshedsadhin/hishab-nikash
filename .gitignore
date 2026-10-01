@@ -1,3 +1,7 @@
 node_modules
 dist
 CLAUDE.md
+.env
+.env*.local
+.vercel
+.neon

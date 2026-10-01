@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { Download, PiggyBank, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -16,6 +16,7 @@ import { todayISO } from '@/lib/dates';
 import { dayLabel, money, monthLabel } from '@/lib/format';
 import { reconRows, savedTotal, suggestedCashStart, type Derived, type Month, type State } from '@/lib/model';
 import { exportData, parseImport } from '@/lib/storage';
+import { getStatus, subscribe } from '@/lib/sync';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -204,6 +205,7 @@ function Reconcile({ m }: { m: Month }) {
 function Backup() {
   const { state, dispatch } = useStore();
   const [pending, setPending] = useState<State | null>(null);
+  const sync = useSyncExternalStore(subscribe, getStatus);
 
   function pickFile(file: File | undefined) {
     if (!file) return;
@@ -220,7 +222,11 @@ function Backup() {
     <Card>
       <CardHeader>
         <CardTitle>ব্যাকআপ</CardTitle>
-        <CardDescription>ব্রাউজারের ডেটা মুছলে হিসাবও মুছে যায়। মাসে একবার নামিয়ে রাখো।</CardDescription>
+        <CardDescription>
+          {sync.username
+            ? 'হিসাব সার্ভারেও রাখা আছে। চাইলে নিজের কাছেও একটা কপি রাখো।'
+            : 'ব্রাউজারের ডেটা মুছলে হিসাবও মুছে যায়। মাসে একবার নামিয়ে রাখো।'}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => exportData(state)}>

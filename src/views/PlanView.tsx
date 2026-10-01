@@ -65,16 +65,14 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
         <KpiCard label="খরচযোগ্য" value={<span className="text-primary">{money(d.spendable)}</span>} />
       </div>
 
-      {d.carry !== 0 && (
+      {m.cashStart == null && d.carry !== 0 && (
         <div className={cn(
           'flex items-center gap-2 rounded-xl border px-4 py-3 text-sm',
           d.carry < 0 ? 'border-danger/40 bg-danger/10' : 'border-success/40 bg-success/10'
         )}>
           {d.carry < 0 ? <ArrowDownRight className="size-4 text-danger" /> : <ArrowUpRight className="size-4 text-success" />}
-          {m.cashStart != null
-            ? 'শুরুতে হাতে ছিল ' + money(d.carry)
-            : monthLabel(prevMonthKey(state.activeMonth)) + ' থেকে ' +
-              (d.carry < 0 ? money(Math.abs(d.carry)) + ' ঘাটতি এই মাসে যোগ হয়েছে' : money(d.carry) + ' বেঁচে এসেছে')}
+          {monthLabel(prevMonthKey(state.activeMonth))} থেকে{' '}
+          {d.carry < 0 ? money(Math.abs(d.carry)) + ' ঘাটতি এই মাসে যোগ হয়েছে' : money(d.carry) + ' বেঁচে এসেছে'}
         </div>
       )}
 

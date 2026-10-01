@@ -12,7 +12,7 @@ import { KpiCard } from '@/components/KpiCard';
 import { NumberInput } from '@/components/NumberInput';
 import { prevMonthKey, uid } from '@/lib/dates';
 import { money, monthLabel } from '@/lib/format';
-import { CATEGORIES, type Derived, type Month } from '@/lib/model';
+import { CATEGORIES, carryInto, type Derived, type Month } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -41,7 +41,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:gap-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Card className="gap-2 px-5 py-4">
           <label htmlFor="income" className="text-sm text-muted-foreground">মাসের আয়</label>
           <NumberInput id="income" value={m.income} disabled={locked} onValue={(v) => dispatch({ type: 'setIncome', value: v ?? 0 })} className="font-fig text-lg" />
@@ -50,7 +50,18 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
           <label htmlFor="savings" className="text-sm text-muted-foreground">যা সরিয়ে রাখবে</label>
           <NumberInput id="savings" value={m.savingsTarget} disabled={locked} onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })} className="font-fig text-lg" />
         </Card>
-        <KpiCard label="খরচযোগ্য" className="col-span-2 sm:col-span-1" value={<span className="text-primary">{money(d.spendable)}</span>} />
+        <Card className="gap-2 px-5 py-4">
+          <label htmlFor="cash-start" className="text-sm text-muted-foreground">মাসের শুরুতে হাতে ছিল</label>
+          <NumberInput
+            id="cash-start"
+            nullable
+            value={m.cashStart}
+            placeholder={String(carryInto(state, state.activeMonth))}
+            onValue={(v) => dispatch({ type: 'setCashStart', value: v })}
+            className="font-fig text-lg"
+          />
+        </Card>
+        <KpiCard label="খরচযোগ্য" value={<span className="text-primary">{money(d.spendable)}</span>} />
       </div>
 
       {d.carry !== 0 && (
@@ -59,8 +70,10 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
           d.carry < 0 ? 'border-danger/40 bg-danger/10' : 'border-success/40 bg-success/10'
         )}>
           {d.carry < 0 ? <ArrowDownRight className="size-4 text-danger" /> : <ArrowUpRight className="size-4 text-success" />}
-          {monthLabel(prevMonthKey(state.activeMonth))} থেকে{' '}
-          {d.carry < 0 ? money(Math.abs(d.carry)) + ' ঘাটতি এই মাসে যোগ হয়েছে' : money(d.carry) + ' বেঁচে এসেছে'}
+          {m.cashStart != null
+            ? 'শুরুতে হাতে ছিল ' + money(d.carry)
+            : monthLabel(prevMonthKey(state.activeMonth)) + ' থেকে ' +
+              (d.carry < 0 ? money(Math.abs(d.carry)) + ' ঘাটতি এই মাসে যোগ হয়েছে' : money(d.carry) + ' বেঁচে এসেছে')}
         </div>
       )}
 
@@ -177,7 +190,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
             </span>
             <span className="text-xs font-light text-muted-foreground">
               {money(d.spendable)} খরচযোগ্য − {money(d.planned)} প্ল্যান · পরের মাসে ফিরবে {money(d.repeating)}
-              {d.carry ? ' · আগের মাস থেকে ' + money(d.carry) : ''}
+              {d.carry ? (m.cashStart != null ? ' · শুরুতে হাতে ' : ' · আগের মাস থেকে ') + money(d.carry) : ''}
             </span>
           </Card>
           <Card>

@@ -308,8 +308,11 @@ export function carryInto(state: State, monthKey: string): number {
   return derive(pm, prevKey, 0).remaining;
 }
 
+/* Cash actually in hand at the start wins over the computed carry: part of the
+   leftover may have been saved. 0 is a real answer, only null falls back. */
 export function deriveMonth(state: State, monthKey: string): Derived {
-  return derive(state.months[monthKey], monthKey, carryInto(state, monthKey));
+  const m = state.months[monthKey];
+  return derive(m, monthKey, m.cashStart ?? carryInto(state, monthKey));
 }
 
 export type Tone = 'good' | 'warn' | 'bad';

@@ -101,6 +101,20 @@ describe('carry', () => {
     state.months['2026-10'] = blankMonth();
     expect(carryInto(state, '2026-10')).toBe(0);
   });
+
+  it('uses cash in hand at the start instead of the carry when written', () => {
+    const aug = blankMonth();
+    aug.income = 5000;
+    const state: State = { activeMonth: '2026-09', months: { '2026-08': aug, '2026-09': september() } };
+    expect(deriveMonth(state, '2026-09').carry).toBe(5000);
+
+    state.months['2026-09'].cashStart = 2000;
+    expect(deriveMonth(state, '2026-09').carry).toBe(2000);
+    expect(deriveMonth(state, '2026-09').spendable).toBe(15000);
+
+    state.months['2026-09'].cashStart = 0;
+    expect(deriveMonth(state, '2026-09').carry).toBe(0);
+  });
 });
 
 describe('reconcile', () => {

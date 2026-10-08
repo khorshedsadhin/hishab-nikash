@@ -163,6 +163,20 @@ describe('months', () => {
     expect(next.months['2026-08'].log[0]).toMatchObject({ name: 'line-a', lineId: null });
   });
 
+  it('adds a repeat spend on the same day to the existing entry', () => {
+    const state: State = { activeMonth: '2026-09', months: { '2026-09': september() } };
+    const next = reducer(state, { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: ' Entry-2 ' });
+    expect(next.months['2026-09'].log).toHaveLength(3);
+    expect(next.months['2026-09'].log[1]).toMatchObject({ id: 'e2', name: 'entry-2', amount: 320 });
+  });
+
+  it('keeps a same-named spend separate on another day or category', () => {
+    let next: State = { activeMonth: '2026-09', months: { '2026-09': september() } };
+    next = reducer(next, { type: 'addSpend', date: '2026-09-16', cat: 'wants', amount: 20, pick: '', name: 'entry-2' });
+    next = reducer(next, { type: 'addSpend', date: '2026-09-15', cat: 'needs', amount: 20, pick: '', name: 'entry-2' });
+    expect(next.months['2026-09'].log).toHaveLength(5);
+  });
+
   it('migrates old saves', () => {
     const s = migrate({
       activeMonth: '2026-09',

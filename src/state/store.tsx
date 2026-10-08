@@ -86,7 +86,12 @@ export function reducer(prev: State, action: Action): State {
       /* A plan line belongs to one month, so the link goes stale if the entry
          lands somewhere other than the month whose plan was on screen. */
       if (target !== m) lineId = null;
-      target.log.push({ id: uid(), date: action.date, name, cat: action.cat, amount: action.amount, lineId });
+      const same = target.log.find((e) =>
+        e.date === action.date && e.cat === action.cat && e.lineId === lineId &&
+        e.name.trim().toLowerCase() === name.trim().toLowerCase()
+      );
+      if (same) same.amount += action.amount;
+      else target.log.push({ id: uid(), date: action.date, name, cat: action.cat, amount: action.amount, lineId });
       markLogged(target, action.date);
       break;
     }

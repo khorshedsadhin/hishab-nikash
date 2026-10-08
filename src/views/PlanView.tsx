@@ -13,6 +13,7 @@ import { NumberInput } from '@/components/NumberInput';
 import { prevMonthKey, uid } from '@/lib/dates';
 import { money, monthLabel } from '@/lib/format';
 import { CATEGORIES, carryInto, type Derived, type Month } from '@/lib/model';
+import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -145,7 +146,14 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                               size="icon-xs"
                               className="text-muted-foreground hover:text-danger"
                               aria-label="মুছে ফেলো"
-                              onClick={() => dispatch({ type: 'deleteLine', cat: c.key, id: l.id })}
+                              onClick={() => {
+                                const month = state.activeMonth;
+                                const index = m.budget[c.key].indexOf(l);
+                                dispatch({ type: 'deleteLine', cat: c.key, id: l.id });
+                                undoToast('লাইন মুছে ফেলা হয়েছে।', () =>
+                                  dispatch({ type: 'restoreLine', month, cat: c.key, line: l, index })
+                                );
+                              }}
                             >
                               <X />
                             </Button>

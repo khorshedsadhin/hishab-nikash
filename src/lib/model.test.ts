@@ -210,6 +210,61 @@ describe('lock', () => {
   });
 });
 
+describe('undo', () => {
+  function state(): State {
+    const m = september();
+    m.checks = [
+      { id: 'c1', date: '2026-09-05', amount: 5000 },
+      { id: 'c2', date: '2026-09-10', amount: 4000 }
+    ];
+    return { activeMonth: '2026-09', months: { '2026-09': m, '2026-08': blankMonth() } };
+  }
+
+  it('puts a deleted entry back in place', () => {
+    const before = state();
+    const entry = before.months['2026-09'].log[1];
+    const gone = reducer(before, { type: 'deleteLog', id: entry.id });
+    expect(reducer(gone, { type: 'restoreLog', month: '2026-09', entry, index: 1 })).toEqual(before);
+  });
+
+  it('puts a deleted check back in place', () => {
+    const before = state();
+    const check = before.months['2026-09'].checks[0];
+    const gone = reducer(before, { type: 'deleteCheck', id: check.id });
+    expect(reducer(gone, { type: 'restoreCheck', month: '2026-09', check, index: 0 })).toEqual(before);
+  });
+
+  it('puts a deleted plan line back in place', () => {
+    const before = state();
+    const line = before.months['2026-09'].budget.needs[0];
+    const gone = reducer(before, { type: 'deleteLine', cat: 'needs', id: line.id });
+    expect(reducer(gone, { type: 'restoreLine', month: '2026-09', cat: 'needs', line, index: 0 })).toEqual(before);
+  });
+
+  it('puts a deleted month back and opens it', () => {
+    const before = state();
+    const gone = reducer(before, { type: 'deleteMonth' });
+    expect(gone.activeMonth).toBe('2026-08');
+    expect(reducer(gone, { type: 'restoreMonth', key: '2026-09', month: before.months['2026-09'] })).toEqual(before);
+  });
+
+  it('restores into the original month after switching months', () => {
+    const before = state();
+    const entry = before.months['2026-09'].log[0];
+    let next = reducer(before, { type: 'deleteLog', id: entry.id });
+    next = reducer(next, { type: 'selectMonth', key: '2026-08' });
+    next = reducer(next, { type: 'restoreLog', month: '2026-09', entry, index: 0 });
+    expect(next.months['2026-09'].log).toEqual(before.months['2026-09'].log);
+    expect(next.months['2026-08'].log).toEqual([]);
+  });
+
+  it('ignores a restore into a month that is gone', () => {
+    const gone = reducer(state(), { type: 'deleteMonth' });
+    const entry = state().months['2026-09'].log[0];
+    expect(reducer(gone, { type: 'restoreLog', month: '2026-09', entry, index: 0 })).toBe(gone);
+  });
+});
+
 describe('streak', () => {
   it('warns after more than two blank days', () => {
     const m = blankMonth();

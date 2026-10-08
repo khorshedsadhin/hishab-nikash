@@ -3,10 +3,18 @@ import { Button } from '@/components/ui/button';
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money } from '@/lib/format';
 import { CATEGORIES, catLabel, type LogEntry } from '@/lib/model';
+import { undoToast } from '@/lib/undo';
 import { useStore } from '@/state/store';
 
 export function Ledger({ log, limit }: { log: LogEntry[]; limit?: number }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
+
+  function remove(entry: LogEntry) {
+    const month = state.activeMonth;
+    const index = state.months[month].log.findIndex((e) => e.id === entry.id);
+    dispatch({ type: 'deleteLog', id: entry.id });
+    undoToast('খরচ মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreLog', month, entry, index }));
+  }
 
   if (!log.length) {
     return <p className="py-6 text-center font-light text-muted-foreground">উপরে প্রথম খরচটা লিখে ফেলো, দিনের হিসাব এখানে জমবে।</p>;
@@ -52,7 +60,7 @@ export function Ledger({ log, limit }: { log: LogEntry[]; limit?: number }) {
                     size="icon-xs"
                     className="text-muted-foreground hover:text-danger"
                     aria-label="মুছে ফেলো"
-                    onClick={() => dispatch({ type: 'deleteLog', id: e.id })}
+                    onClick={() => remove(e)}
                   >
                     <X />
                   </Button>

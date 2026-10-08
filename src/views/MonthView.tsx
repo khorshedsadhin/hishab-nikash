@@ -17,6 +17,7 @@ import { dayLabel, money, monthLabel } from '@/lib/format';
 import { reconRows, savedTotal, suggestedCashStart, type Derived, type Month, type State } from '@/lib/model';
 import { exportData, parseImport } from '@/lib/storage';
 import { getStatus, subscribe } from '@/lib/sync';
+import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -96,6 +97,14 @@ function Reconcile({ m }: { m: Month }) {
     dispatch({ type: 'addCheck', date: checkDate || todayISO(), amount: Number(checkAmount) || 0 });
     setCheckAmount('');
     setCheckDate(todayISO());
+  }
+
+  function removeCheck(id: string) {
+    const month = state.activeMonth;
+    const index = m.checks.findIndex((c) => c.id === id);
+    const check = m.checks[index];
+    dispatch({ type: 'deleteCheck', id });
+    undoToast('মিলানো মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreCheck', month, check, index }));
   }
 
   return (
@@ -179,7 +188,7 @@ function Reconcile({ m }: { m: Month }) {
                   size="icon-xs"
                   className="text-muted-foreground hover:text-danger"
                   aria-label="মুছে ফেলো"
-                  onClick={() => dispatch({ type: 'deleteCheck', id: check.id })}
+                  onClick={() => removeCheck(check.id)}
                 >
                   <X />
                 </Button>
@@ -295,7 +304,7 @@ function DeleteMonth() {
             <AlertDialogHeader>
               <AlertDialogTitle>{label} মুছে ফেলবে?</AlertDialogTitle>
               <AlertDialogDescription>
-                এই মাসের সব হিসাব মুছে যাবে, ফেরত আনা যাবে না। পরের মাসে ‘আগের মাস থেকে’ আসা টাকাও আর আসবে না।
+                এই মাসের সব হিসাব মুছে যাবে। মুছে ফেলার পর কয়েক সেকেন্ড ফেরত আনার সুযোগ থাকবে। পরের মাসে ‘আগের মাস থেকে’ আসা টাকাও আর আসবে না।
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -303,8 +312,10 @@ function DeleteMonth() {
               <AlertDialogAction
                 variant="destructive"
                 onClick={() => {
+                  const key = state.activeMonth;
+                  const month = state.months[key];
                   dispatch({ type: 'deleteMonth' });
-                  toast.success(label + ' মুছে ফেলা হয়েছে।');
+                  undoToast(label + ' মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreMonth', key, month }));
                 }}
               >
                 হ্যাঁ, মুছে ফেলো

@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
-import { blankMonth, expectedAt, makeNewMonth, migrate, type Month, type State } from '@/lib/model';
+import {
+  blankMonth, expectedAt, makeNewMonth, migrate, type Check, type Line, type LogEntry, type Month, type State
+} from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
 
@@ -25,6 +27,10 @@ export type Action =
   | { type: 'openNextMonth' }
   | { type: 'importState'; state: State }
   | { type: 'deleteMonth' }
+  | { type: 'restoreLog'; month: string; entry: LogEntry; index: number }
+  | { type: 'restoreCheck'; month: string; check: Check; index: number }
+  | { type: 'restoreLine'; month: string; cat: string; line: Line; index: number }
+  | { type: 'restoreMonth'; key: string; month: Month }
   | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
 /* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
@@ -150,6 +156,29 @@ export function reducer(prev: State, action: Action): State {
       break;
     case 'deleteMonth':
       dropMonth(state, state.activeMonth);
+      break;
+    /* Undo targets the month the item came from; the active month may have changed since. */
+    case 'restoreLog': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.log.splice(action.index, 0, action.entry);
+      break;
+    }
+    case 'restoreCheck': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.checks.splice(action.index, 0, action.check);
+      break;
+    }
+    case 'restoreLine': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.budget[action.cat].splice(action.index, 0, action.line);
+      break;
+    }
+    case 'restoreMonth':
+      state.months[action.key] = action.month;
+      state.activeMonth = action.key;
       break;
     case 'openNextMonth': {
       const nextKey = nextMonthKey(state.activeMonth);

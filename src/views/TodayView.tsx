@@ -101,7 +101,7 @@ export function TodayView({ m, d }: { m: Month; d: Derived }) {
           <CardTitle>সাম্প্রতিক খরচ</CardTitle>
         </CardHeader>
         <CardContent>
-          <Ledger log={m.log} limit={12} />
+          <Ledger log={m.log} days={5} />
         </CardContent>
       </Card>
     </div>

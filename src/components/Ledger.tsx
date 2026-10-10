@@ -6,7 +6,7 @@ import { CATEGORIES, catLabel, type LogEntry } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { useStore } from '@/state/store';
 
-export function Ledger({ log, limit }: { log: LogEntry[]; limit?: number }) {
+export function Ledger({ log, days }: { log: LogEntry[]; days?: number }) {
   const { state, dispatch } = useStore();
 
   function remove(entry: LogEntry) {
@@ -20,11 +20,10 @@ export function Ledger({ log, limit }: { log: LogEntry[]; limit?: number }) {
     return <p className="py-6 text-center font-light text-muted-foreground">উপরে প্রথম খরচটা লিখে ফেলো, দিনের হিসাব এখানে জমবে।</p>;
   }
 
-  let sorted = log.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  if (limit) sorted = sorted.slice(0, limit);
+  const sorted = log.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const byDate: Record<string, LogEntry[]> = {};
-  const order: string[] = [];
+  let order: string[] = [];
   sorted.forEach((e) => {
     if (!byDate[e.date]) {
       byDate[e.date] = [];
@@ -32,6 +31,7 @@ export function Ledger({ log, limit }: { log: LogEntry[]; limit?: number }) {
     }
     byDate[e.date].push(e);
   });
+  if (days) order = order.slice(0, days);
 
   const todayStr = todayISO();
   return (

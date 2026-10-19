@@ -16,13 +16,12 @@ export function QuickAdd({ m, d }: { m: Month; d: Derived }) {
   const { state, dispatch } = useStore();
   const monthStart = state.activeMonth + '-01';
   const monthEnd = state.activeMonth + '-' + pad(d.dim);
-  const defaultDate = d.isCurrent ? todayISO() : monthStart;
 
   const [amount, setAmount] = useState('');
   const [cat, setCat] = useState<string>(CATEGORIES[0].key);
   const [pick, setPick] = useState('');
   const [name, setName] = useState('');
-  const [date, setDate] = useState(defaultDate);
+  const [date, setDate] = useState(d.isCurrent ? todayISO() : monthStart);
   const amountRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -48,7 +47,6 @@ export function QuickAdd({ m, d }: { m: Month; d: Derived }) {
     setCat(CATEGORIES[0].key);
     setPick('');
     setName('');
-    setDate(defaultDate);
     amountRef.current?.focus();
   }
 

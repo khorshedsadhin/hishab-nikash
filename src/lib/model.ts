@@ -1,7 +1,7 @@
 import { daysApart, daysInMonth, addDaysISO, mondayOf, prevMonthKey, todayISO, uid } from './dates';
 import { dayLabel, money, toBn } from './format';
 
-export type CatKey = 'needs' | 'wants' | 'culture' | 'unexpected';
+export type CatKey = 'needs' | 'wants' | 'giving' | 'unexpected';
 
 export interface Line {
   id: string;
@@ -45,8 +45,8 @@ export interface State {
 
 export const CATEGORIES: { key: CatKey; label: string; tint: string }[] = [
   { key: 'needs', label: 'দরকারি', tint: 'var(--cat-needs)' },
-  { key: 'wants', label: 'শখ', tint: 'var(--cat-wants)' },
-  { key: 'culture', label: 'শেখা', tint: 'var(--cat-culture)' },
+  { key: 'wants', label: 'ইচ্ছা', tint: 'var(--cat-wants)' },
+  { key: 'giving', label: 'অন্যের জন্য', tint: 'var(--cat-giving)' },
   { key: 'unexpected', label: 'অনাকাঙ্ক্ষিত', tint: 'var(--cat-unexpected)' }
 ];
 
@@ -105,6 +105,11 @@ export function migrate(s: any): State {
   Object.keys(s.months).forEach((k) => {
     const m = s.months[k];
     if (!m.budget) m.budget = {};
+    /* The old learning category was dropped; its spending counts as a want. */
+    if (Array.isArray(m.budget.culture)) {
+      m.budget.wants = (m.budget.wants || []).concat(m.budget.culture);
+      delete m.budget.culture;
+    }
     CATEGORIES.forEach((c) => {
       if (!Array.isArray(m.budget[c.key])) m.budget[c.key] = [];
     });
@@ -117,6 +122,7 @@ export function migrate(s: any): State {
     if (typeof m.locked !== 'boolean') m.locked = false;
     m.log.forEach((e: LogEntry) => {
       if (e.lineId === undefined) e.lineId = null;
+      if (e.cat === 'culture') e.cat = 'wants';
       if (m.loggedDays.indexOf(e.date) < 0) m.loggedDays.push(e.date);
     });
   });

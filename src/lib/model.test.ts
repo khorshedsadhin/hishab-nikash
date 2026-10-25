@@ -177,6 +177,21 @@ describe('months', () => {
     expect(next.months['2026-09'].log).toHaveLength(5);
   });
 
+  it('folds the old learning category into wants', () => {
+    const s = migrate({
+      activeMonth: '2026-09',
+      months: { '2026-09': {
+        income: 1, savingsTarget: 0,
+        budget: { wants: [{ id: 'B', name: 'line-b', amount: 10, repeat: false }], culture: [{ id: 'C', name: 'line-c', amount: 20, repeat: true }] },
+        log: [{ id: 'a', date: '2026-09-03', cat: 'culture', amount: 5, lineId: 'C' }]
+      } }
+    });
+    const m = s.months['2026-09'];
+    expect(m.budget.wants.map((l) => l.id)).toEqual(['B', 'C']);
+    expect(m.budget.culture).toBeUndefined();
+    expect(m.log[0].cat).toBe('wants');
+  });
+
   it('migrates old saves', () => {
     const s = migrate({
       activeMonth: '2026-09',
@@ -185,7 +200,7 @@ describe('months', () => {
     const m = s.months['2026-09'];
     expect(m.log[0].lineId).toBeNull();
     expect(m.loggedDays).toEqual(['2026-09-03']);
-    expect(m.budget.culture).toEqual([]);
+    expect(m.budget.giving).toEqual([]);
     expect(m.saved).toBeNull();
     expect(m.cashStart).toBeNull();
     expect(m.reflection).toBe('');

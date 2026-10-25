@@ -17,7 +17,7 @@ The app runs in the browser and saves data in `localStorage`. An optional accoun
 ## Features
 
 - **Today dashboard:** shows money left, today's and this week's spending against their allowance, and how much is free versus tied up in fixed costs. A daily spending chart marks days you haven't logged.
-- **Plan:** set income and savings, then add budget lines in four categories: দরকারি (needs), শখ (wants), শেখা (learning) and অনাকাঙ্ক্ষিত (unexpected). Mark each line as every month or this month only. Spending is tracked against each line.
+- **Plan:** set income and savings, then add budget lines in four categories: দরকারি (needs), ইচ্ছা (wants), অন্যের জন্য (giving) and অনাকাঙ্ক্ষিত (unexpected). Mark each line as every month or this month only. Spending is tracked against each line.
 - **Safe to spend:** the daily and weekly allowance leave out repeating costs you haven't paid yet, so a bill that's still due isn't counted as free money.
 - **Carry-over:** what was left from, or overspent in, last month is added to this month.
 - **Reconcile:** enter the cash you actually have. Any gap against the ledger can be logged as one unknown expense.

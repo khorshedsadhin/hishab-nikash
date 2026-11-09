@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Lock, LockOpen, Plus, Repeat, X } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
@@ -47,47 +47,45 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel className="xl:col-span-2">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-10">
-            <Incomes m={m} d={d} />
+          <Incomes m={m} d={d} locked={locked} />
 
-            <div className="grid content-start gap-3 border-t pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-10">
-              <SumRow label="মোট আয়" value={money(d.income)} />
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">সঞ্চয়ে সরাবে</span>
-                <span className="flex items-center gap-1 font-fig">
-                  −
-                  <NumberInput
-                    value={m.savingsTarget}
-                    disabled={locked}
-                    onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })}
-                    aria-label="সঞ্চয়ে সরাবে"
-                    className="h-9 w-28 rounded-lg text-right font-fig"
-                  />
-                </span>
-              </label>
-              <label className="flex items-center justify-between gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {monthLabel(prevMonthKey(state.activeMonth))} থেকে
-                  <span className="block text-xs">শুরুতে হাতে থাকা খরচের টাকা</span>
-                </span>
-                <NumberInput
-                  nullable
-                  value={m.cashStart}
-                  disabled={locked}
-                  placeholder={String(carryInto(state, state.activeMonth))}
-                  onValue={(v) => dispatch({ type: 'setCashStart', value: v })}
-                  aria-label="শুরুতে হাতে ছিল"
-                  className="h-9 w-28 rounded-lg text-right font-fig"
-                />
-              </label>
-              <div className="flex items-baseline justify-between border-t pt-3">
-                <span className="font-medium">খরচযোগ্য</span>
-                <span className={cn('font-fig text-3xl font-semibold', d.spendable < 0 ? 'text-danger' : 'text-primary')}>
-                  {money(d.spendable)}
-                </span>
+          <div className="mt-5 grid gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1.2fr)] lg:items-end lg:gap-3">
+            <Term label="মোট আয়">
+              <div className="flex h-10 items-center font-fig text-2xl">{money(d.income)}</div>
+            </Term>
+            <Op>−</Op>
+            <Term label="সঞ্চয়ে সরাবে" htmlFor="plan-savings">
+              <NumberInput
+                id="plan-savings"
+                value={m.savingsTarget}
+                disabled={locked}
+                onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })}
+                className="h-10 rounded-xl font-fig text-lg"
+              />
+            </Term>
+            <Op>+</Op>
+            <Term label={monthLabel(prevMonthKey(state.activeMonth)) + ' থেকে হাতে'} htmlFor="plan-carry">
+              <NumberInput
+                id="plan-carry"
+                nullable
+                value={m.cashStart}
+                disabled={locked}
+                placeholder={String(carryInto(state, state.activeMonth))}
+                onValue={(v) => dispatch({ type: 'setCashStart', value: v })}
+                className="h-10 rounded-xl font-fig text-lg"
+              />
+            </Term>
+            <Op>=</Op>
+            <div className="rounded-2xl bg-muted px-4 py-2 sm:col-span-2 lg:col-span-1">
+              <div className="text-sm text-muted-foreground">খরচযোগ্য</div>
+              <div className={cn('font-fig text-3xl font-semibold', d.spendable < 0 ? 'text-danger' : 'text-primary')}>
+                {money(d.spendable)}
               </div>
+            </div>
+          </div>
 
-              <div className="mt-2 flex h-3 gap-0.5 overflow-hidden rounded-full bg-track">
+          <div className="mt-5 grid gap-2">
+              <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-track">
                 {CATEGORIES.map((c) => (
                   <div key={c.key} style={{ width: share(d.perCategory[c.key].planned) + '%', background: c.tint }} />
                 ))}
@@ -107,7 +105,6 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                     ? money(d.buffer) + ' এখনো কোনো খাতে ভাগ হয়নি।'
                     : 'সব টাকা খাতে ভাগ হয়ে গেছে।'}
               </p>
-            </div>
           </div>
         </Panel>
 
@@ -239,17 +236,22 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
   );
 }
 
-function SumRow({ label, value }: { label: string; value: string }) {
+function Term({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-fig text-lg">{value}</span>
+    <div className="grid gap-1.5">
+      <label htmlFor={htmlFor} className="text-sm text-muted-foreground">{label}</label>
+      {children}
     </div>
   );
 }
 
+/* Operators read the equation left to right on wide screens; stacked, the labels say enough. */
+function Op({ children }: { children: ReactNode }) {
+  return <span aria-hidden className="hidden pb-2 font-fig text-xl text-muted-foreground lg:block">{children}</span>;
+}
+
 /* Income lines: expected ones wait for a tap when the money actually arrives. */
-function Incomes({ m, d }: { m: Month; d: Derived }) {
+function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
   const { state, dispatch } = useStore();
   const [newId, setNewId] = useState<string | null>(null);
   const arrivalDate = () => {
@@ -267,16 +269,25 @@ function Incomes({ m, d }: { m: Month; d: Derived }) {
 
   return (
     <div>
-      <PanelTitle action={<span className="text-sm text-muted-foreground">এসেছে {money(d.received)}</span>}>আয়</PanelTitle>
+      <PanelTitle
+        action={
+          <span className="text-sm text-muted-foreground">
+            এসেছে {money(d.received)}{d.income > d.received ? ' · আসবে ' + money(d.income - d.received) : ''}
+          </span>
+        }
+      >
+        আয়
+      </PanelTitle>
       {m.incomes.length === 0 && (
         <p className="py-3 text-sm text-muted-foreground">এই মাসে কোথা থেকে কত আসবে লেখো। বেতন, প্রজেক্ট, যেকোনো আয়।</p>
       )}
-      <div className="divide-y">
+      <div className="grid lg:grid-cols-2 lg:gap-x-10">
         {m.incomes.map((x) => (
-          <div key={x.id} className="flex flex-wrap items-center gap-1 py-1.5">
+          <div key={x.id} className="flex flex-wrap items-center gap-1 border-b py-1.5">
             <Input
               value={x.name}
               placeholder="কোথা থেকে"
+              disabled={locked}
               autoFocus={x.id === newId}
               onChange={(e) => dispatch({ type: 'updateIncome', id: x.id, name: e.target.value })}
               className={cn(ghostInput, 'min-w-28 flex-1 basis-0 px-2')}
@@ -284,6 +295,7 @@ function Incomes({ m, d }: { m: Month; d: Derived }) {
             <button
               type="button"
               aria-pressed={x.repeat}
+              disabled={locked}
               title={x.repeat ? 'প্রতি মাসে আসে' : 'শুধু এই মাসে'}
               aria-label={x.repeat ? 'প্রতি মাসে আসে' : 'শুধু এই মাসে'}
               onClick={() => dispatch({ type: 'toggleIncomeRepeat', id: x.id })}
@@ -296,6 +308,7 @@ function Incomes({ m, d }: { m: Month; d: Derived }) {
             </button>
             <NumberInput
               value={x.amount}
+              disabled={locked}
               onValue={(v) => dispatch({ type: 'updateIncome', id: x.id, amount: v ?? 0 })}
               aria-label="টাকা"
               className={cn(ghostInput, 'w-24 shrink-0 text-right font-fig')}
@@ -318,24 +331,30 @@ function Incomes({ m, d }: { m: Month; d: Derived }) {
                 আসবে · এলো?
               </button>
             )}
-            <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-danger" aria-label="মুছে ফেলো" onClick={() => remove(x)}>
-              <X />
-            </Button>
+            {!locked && (
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-danger" aria-label="মুছে ফেলো" onClick={() => remove(x)}>
+                <X />
+              </Button>
+            )}
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          const id = uid();
-          setNewId(id);
-          dispatch({ type: 'addIncome', id, name: '', amount: 0, date: null, repeat: false, toSavings: 0 });
-        }}
-        className="mt-1 flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <Plus className="size-4" />
-        আয় যোগ করো
-      </button>
+      {locked ? (
+        <p className="mt-3 text-sm text-muted-foreground">প্ল্যান লক করা। আয় যোগ বা বদলাতে আনলক করো। টাকা এলে শুধু ‘এসেছে’ চিহ্ন দেওয়া যায়।</p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            const id = uid();
+            setNewId(id);
+            dispatch({ type: 'addIncome', id, name: '', amount: 0, date: null, repeat: false, toSavings: 0 });
+          }}
+          className="mt-1 flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <Plus className="size-4" />
+          আয় যোগ করো
+        </button>
+      )}
     </div>
   );
 }

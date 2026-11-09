@@ -297,13 +297,23 @@ describe('income', () => {
     expect(derive(m, '2026-09').spendable).toBe(16000);
   });
 
-  it('takes income while the plan is locked', () => {
+  it('refuses income changes while the plan is locked', () => {
     const m = september();
     m.locked = true;
-    const next = reducer({ activeMonth: '2026-09', months: { '2026-09': m } }, {
+    const state: State = { activeMonth: '2026-09', months: { '2026-09': m } };
+    expect(reducer(state, {
       type: 'addIncome', name: '', amount: 100, date: '2026-09-15', repeat: false, toSavings: 0
-    });
-    expect(next.months['2026-09'].incomes).toHaveLength(2);
+    })).toBe(state);
+    expect(reducer(state, { type: 'updateIncome', id: 'I', amount: 1 })).toBe(state);
+    expect(reducer(state, { type: 'deleteIncome', id: 'I' })).toBe(state);
+  });
+
+  it('still marks an income as arrived while locked', () => {
+    const m = september();
+    m.locked = true;
+    m.incomes[0].date = null;
+    const next = reducer({ activeMonth: '2026-09', months: { '2026-09': m } }, { type: 'receiveIncome', id: 'I', date: '2026-09-05' });
+    expect(next.months['2026-09'].incomes[0].date).toBe('2026-09-05');
   });
 
   it('marks an expected income as arrived', () => {

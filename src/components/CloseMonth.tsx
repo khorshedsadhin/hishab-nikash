@@ -121,7 +121,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
               {gap === 0 && <span className="flex items-center gap-2 text-success"><Check className="size-4" />মিলে গেছে।</span>}
               {gap > 0 && (
                 <label className="flex items-start gap-3">
-                  <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} className="mt-1 size-4 accent-(--primary)" />
+                  <input type="checkbox" checked={fill} onChange={(e) => setFill(e.target.checked)} className="mt-1 size-4 accent-primary" />
                   <span>
                     <b className="font-medium text-warning">{money(gap)}</b> খরচ লেখা হয়নি। অজানা খরচ হিসেবে লিখে দাও।
                   </span>

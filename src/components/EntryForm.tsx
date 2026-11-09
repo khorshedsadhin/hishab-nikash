@@ -44,7 +44,15 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
           </button>
         ))}
       </div>
-      {mode === 'spend' ? <SpendForm m={m} d={d} onDone={onDone} /> : <IncomeForm d={d} onDone={onDone} />}
+      {mode === 'spend' ? (
+        <SpendForm m={m} d={d} onDone={onDone} />
+      ) : m.locked ? (
+        <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+          প্ল্যান লক করা আছে। আয় যোগ করতে আগে প্ল্যান থেকে আনলক করো।
+        </p>
+      ) : (
+        <IncomeForm d={d} onDone={onDone} />
+      )}
     </div>
   );
 }
@@ -285,7 +293,7 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
           type="checkbox"
           checked={repeat}
           onChange={(e) => setRepeat(e.target.checked)}
-          className="size-4.5 accent-(--primary)"
+          className="size-4.5 accent-primary"
         />
         প্রতি মাসে আসে (পরের মাসের প্ল্যানে আপনা থেকে থাকবে)
       </label>

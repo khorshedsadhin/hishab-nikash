@@ -53,7 +53,7 @@ export type Action =
   | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
 /* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
-const PLAN_EDITS = ['setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
+const PLAN_EDITS = ['updateIncome', 'toggleIncomeRepeat', 'deleteIncome', 'setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
 
 /* The app always needs an active month, so dropping the last one leaves a blank current month. */
 function dropMonth(state: State, key: string) {
@@ -139,10 +139,10 @@ export function reducer(prev: State, action: Action): State {
       markLogged(m, check.date);
       break;
     }
-    /* Income is a fact, not a plan promise, so the lock does not hold it back. */
+    /* The lock holds income too; checked on the month the income lands in. */
     case 'addIncome': {
       const target = action.date ? state.months[action.date.slice(0, 7)] : m;
-      if (!target) return prev;
+      if (!target || target.locked) return prev;
       target.incomes.push({
         id: action.id ?? uid(),
         name: action.name.trim(),

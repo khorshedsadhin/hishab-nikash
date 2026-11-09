@@ -47,9 +47,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel className="xl:col-span-2">
-          <Incomes m={m} d={d} locked={locked} />
-
-          <div className="mt-5 grid gap-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1.2fr)] lg:items-end lg:gap-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1.2fr)] lg:items-end lg:gap-3">
             <Term label="মোট আয়">
               <div className="flex h-10 items-center font-fig text-2xl">{money(d.income)}</div>
             </Term>
@@ -209,6 +207,10 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
             </Panel>
           );
         })}
+
+        <Panel className="xl:col-span-2">
+          <Incomes m={m} d={d} locked={locked} />
+        </Panel>
       </div>
 
       <p className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -279,7 +281,7 @@ function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
         আয়
       </PanelTitle>
       {m.incomes.length === 0 && (
-        <p className="py-3 text-sm text-muted-foreground">এই মাসে কোথা থেকে কত আসবে লেখো। বেতন, প্রজেক্ট, যেকোনো আয়।</p>
+        <p className="py-3 text-sm text-muted-foreground">আয় যোগ করতে + চাপো, অথবা এখানে আগে থেকে ধরে রাখো যা আসবে।</p>
       )}
       <div className="grid lg:grid-cols-2 lg:gap-x-10">
         {m.incomes.map((x) => (
@@ -340,7 +342,7 @@ function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
         ))}
       </div>
       {locked ? (
-        <p className="mt-3 text-sm text-muted-foreground">প্ল্যান লক করা। আয় যোগ বা বদলাতে আনলক করো। টাকা এলে শুধু ‘এসেছে’ চিহ্ন দেওয়া যায়।</p>
+        <p className="mt-3 text-sm text-muted-foreground">প্ল্যান লক করা। বদলাতে আনলক করো।</p>
       ) : (
         <button
           type="button"

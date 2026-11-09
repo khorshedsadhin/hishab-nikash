@@ -3,6 +3,10 @@ const BN_DIGITS = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮'
 export const BN_MONTHS = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
   'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
 
+/* Indexed by Date#getDay(), Sunday first. */
+export const BN_WEEKDAYS = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+export const BN_WEEKDAYS_LONG = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+
 export function toBn(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => BN_DIGITS[+d]);
 }

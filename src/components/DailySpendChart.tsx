@@ -17,7 +17,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
   const todayStr = todayISO();
   const logged = new Set(m.loggedDays || []);
   const max = Math.max(0, ...Object.values(d.byDay));
-  const par = d.spendable / d.dim;
+  const par = d.perDay;
   const scale = Math.max(max, par * 1.5, 1);
 
   const data: Day[] = [];
@@ -25,10 +25,10 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
     const date = monthKey + '-' + pad(i);
     const amt = d.byDay[date] || 0;
     const unlogged = date <= todayStr && !amt && !logged.has(date);
-    let color = 'var(--muted-foreground)';
-    if (date > todayStr) color = 'var(--border)';
+    let color = 'color-mix(in srgb, var(--muted-foreground) 45%, transparent)';
+    if (date > todayStr) color = 'var(--track)';
     if (amt > par) color = 'var(--warning)';
-    if (date === todayStr) color = 'var(--foreground)';
+    if (date === todayStr) color = 'var(--primary)';
     data.push({ day: i, date, amt, ghost: unlogged ? scale * 0.25 : 0, unlogged, color });
   }
 
@@ -68,7 +68,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
                 );
               }}
             />
-            <ReferenceLine y={par} stroke="var(--primary)" strokeDasharray="4 4" strokeOpacity={0.7} />
+            <ReferenceLine y={par} stroke="var(--muted-foreground)" strokeDasharray="4 4" strokeOpacity={0.6} />
             <Bar dataKey="amt" stackId="d" radius={[4, 4, 0, 0]} minPointSize={2} isAnimationActive={false}>
               {data.map((x) => <Cell key={x.date} fill={x.color} />)}
             </Bar>
@@ -78,8 +78,8 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-light text-muted-foreground">
         <span className="flex items-center gap-2">
-          <span className="inline-block w-5 border-t-2 border-dashed border-primary/70" />
-          দিনে {money(par)} পর্যন্ত চললে মাস কাটে
+          <span className="inline-block w-5 border-t-2 border-dashed border-muted-foreground/60" />
+          দিনে ধরা {money(par)}
         </span>
         <span className="flex items-center gap-2">
           <svg width="10" height="10" aria-hidden><rect width="10" height="10" fill="url(#unlogged)" /></svg>

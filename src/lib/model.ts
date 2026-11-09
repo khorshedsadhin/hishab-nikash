@@ -1,4 +1,4 @@
-import { daysApart, daysInMonth, addDaysISO, mondayOf, prevMonthKey, todayISO, uid } from './dates';
+import { addDaysISO, daysApart, daysInMonth, pad, prevMonthKey, saturdayOf, todayISO, uid } from './dates';
 import { dayLabel, money, toBn } from './format';
 
 export type CatKey = 'needs' | 'wants' | 'giving' | 'unexpected';
@@ -19,6 +19,15 @@ export interface LogEntry {
   lineId: string | null;
 }
 
+/* A null date means the income is expected but has not arrived yet. */
+export interface Income {
+  id: string;
+  name: string;
+  amount: number;
+  date: string | null;
+  repeat: boolean;
+}
+
 export interface Check {
   id: string;
   date: string;
@@ -26,7 +35,7 @@ export interface Check {
 }
 
 export interface Month {
-  income: number;
+  incomes: Income[];
   savingsTarget: number;
   budget: Record<string, Line[]>;
   log: LogEntry[];
@@ -36,6 +45,8 @@ export interface Month {
   checks: Check[];
   loggedDays: string[];
   locked: boolean;
+  /* Set by the month-end close; the next month starts from its counted cash. */
+  closed: boolean;
 }
 
 export interface State {
@@ -62,8 +73,11 @@ export function makeNewMonth(fromMonth: Month): Month {
       .filter((l) => l.repeat)
       .map((l) => ({ id: uid(), name: l.name, amount: l.amount, repeat: true }));
   });
+  const incomes = (fromMonth.incomes || [])
+    .filter((x) => x.repeat)
+    .map((x) => ({ id: uid(), name: x.name, amount: x.amount, date: null, repeat: true }));
   return {
-    income: fromMonth.income,
+    incomes,
     savingsTarget: fromMonth.savingsTarget,
     budget,
     log: [],
@@ -72,7 +86,8 @@ export function makeNewMonth(fromMonth: Month): Month {
     cashStart: null,
     checks: [],
     loggedDays: [],
-    locked: false
+    locked: false,
+    closed: false
   };
 }
 
@@ -82,7 +97,7 @@ export function blankMonth(): Month {
     budget[c.key] = [];
   });
   return {
-    income: 0,
+    incomes: [],
     savingsTarget: 0,
     budget,
     log: [],
@@ -91,7 +106,8 @@ export function blankMonth(): Month {
     cashStart: null,
     checks: [],
     loggedDays: [],
-    locked: false
+    locked: false,
+    closed: false
   };
 }
 
@@ -100,7 +116,15 @@ export function seed(): State {
   return { activeMonth: key, months: { [key]: blankMonth() } };
 }
 
-/* Old saves predate the reconcile fields and the per-line spend links. */
+export function incomeTotal(m: Month): number {
+  return (m.incomes || []).reduce((s, x) => s + (x.amount || 0), 0);
+}
+
+export function receivedUpto(m: Month, date: string): number {
+  return (m.incomes || []).reduce((s, x) => s + (x.date != null && x.date <= date ? (x.amount || 0) : 0), 0);
+}
+
+/* Old saves predate the reconcile fields, the per-line spend links and the income list. */
 export function migrate(s: any): State {
   Object.keys(s.months).forEach((k) => {
     const m = s.months[k];
@@ -120,6 +144,13 @@ export function migrate(s: any): State {
     if (!Array.isArray(m.checks)) m.checks = [];
     if (!Array.isArray(m.loggedDays)) m.loggedDays = [];
     if (typeof m.locked !== 'boolean') m.locked = false;
+    if (typeof m.closed !== 'boolean') m.closed = false;
+    /* A single income number becomes one income that arrived on the 1st, as it was assumed before. */
+    if (!Array.isArray(m.incomes)) {
+      const amount = typeof m.income === 'number' ? m.income : 0;
+      m.incomes = amount > 0 ? [{ id: 'income-' + k, name: 'আয়', amount, date: k + '-01', repeat: true }] : [];
+    }
+    delete m.income;
     m.log.forEach((e: LogEntry) => {
       if (e.lineId === undefined) e.lineId = null;
       if (e.cat === 'culture') e.cat = 'wants';
@@ -135,10 +166,10 @@ function spentUpto(m: Month, date: string): number {
   return (m.log || []).reduce((s, e) => s + (e.date <= date ? (e.amount || 0) : 0), 0);
 }
 
-/* Assumes the month's income lands at the start and `saved` has already left. */
+/* Counts income from the day it arrived; assumes `saved` has already left. */
 export function expectedAt(m: Month, date: string): number | null {
   if (m.cashStart == null) return null;
-  return m.cashStart + m.income - spentUpto(m, date) - (m.saved || 0);
+  return m.cashStart + receivedUpto(m, date) - spentUpto(m, date) - (m.saved || 0);
 }
 
 export interface ReconRow {
@@ -179,8 +210,21 @@ export interface CategoryTotals {
   unlinked: number;
 }
 
+export interface Week {
+  start: string;
+  end: string;
+  /* Dates of the week that fall inside this month. */
+  days: string[];
+  budget: number;
+  spent: number;
+  left: number;
+  perDay: number;
+}
+
 export interface Derived {
   carry: number;
+  income: number;
+  received: number;
   spendable: number;
   planned: number;
   buffer: number;
@@ -192,15 +236,56 @@ export interface Derived {
   committedLeft: number;
   safeRemaining: number;
   expectedByNow: number;
-  dailyAllowance: number;
-  weeklyAllowance: number;
-  thisWeekSpent: number;
+  week: Week | null;
+  perDay: number;
   todaySpent: number;
   byDay: Record<string, number>;
   dim: number;
+  elapsedDays: number;
   daysLeft: number;
   isCurrent: boolean;
   isFuture: boolean;
+}
+
+/* Money still owed to repeating lines, given what each had received by then. */
+function committedFrom(m: Month, lineSpent: Record<string, number>): number {
+  let total = 0;
+  CATEGORIES.forEach((c) => {
+    (m.budget[c.key] || []).forEach((l) => {
+      if (l.repeat) total += Math.max(0, l.amount - (lineSpent[l.id] || 0));
+    });
+  });
+  return total;
+}
+
+/* The week's share is fixed on its first day, so spending inside the week never moves the target. */
+function weekOf(m: Month, monthKey: string, spendable: number, todayStr: string): Week {
+  const dim = daysInMonth(monthKey);
+  const first = monthKey + '-01';
+  const last = lastDayOf(monthKey);
+  const sat = saturdayOf(todayStr);
+  const fri = addDaysISO(sat, 6);
+  const start = sat < first ? first : sat;
+  const end = fri > last ? last : fri;
+
+  const before: Record<string, number> = {};
+  let spentBefore = 0;
+  let spent = 0;
+  (m.log || []).forEach((e) => {
+    if (e.date < start) {
+      spentBefore += e.amount || 0;
+      if (e.lineId) before[e.lineId] = (before[e.lineId] || 0) + (e.amount || 0);
+    } else if (e.date <= end) {
+      spent += e.amount || 0;
+    }
+  });
+
+  const days: string[] = [];
+  for (let dt = start; dt <= end; dt = addDaysISO(dt, 1)) days.push(dt);
+  const safeAtStart = spendable - spentBefore - committedFrom(m, before);
+  const daysLeftAtStart = dim - Number(start.slice(8, 10)) + 1;
+  const budget = safeAtStart <= 0 ? 0 : Math.round(safeAtStart / daysLeftAtStart * days.length);
+  return { start, end, days, budget, spent, left: budget - spent, perDay: Math.round(budget / days.length) };
 }
 
 export function derive(m: Month, monthKey: string, carry = 0): Derived {
@@ -211,10 +296,10 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     if (e.lineId) lineActual[e.lineId] = (lineActual[e.lineId] || 0) + (e.amount || 0);
   });
 
-  const spendable = m.income - m.savingsTarget + carry;
+  const income = incomeTotal(m);
+  const spendable = income - m.savingsTarget + carry;
   let planned = 0;
   let repeating = 0;
-  let committedLeft = 0;
   const perCategory: Record<string, CategoryTotals> = {};
 
   CATEGORIES.forEach((c) => {
@@ -242,9 +327,9 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     };
     planned += catPlanned;
     repeating += catRepeating;
-    committedLeft += catCommitted;
   });
 
+  const committedLeft = committedFrom(m, lineActual);
   const buffer = spendable - planned;
   const actual = log.reduce((s, e) => s + (e.amount || 0), 0);
   const remaining = spendable - actual;
@@ -256,31 +341,27 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
   const dim = daysInMonth(monthKey);
   let elapsedDays: number;
   if (monthKey > todayMonthKey) {
-    elapsedDays = 1;
+    elapsedDays = 0;
   } else if (monthKey < todayMonthKey) {
     elapsedDays = dim;
   } else {
     elapsedDays = Number(todayStr.slice(8, 10));
   }
-  const daysLeft = Math.max(1, dim - elapsedDays + 1);
+  const daysLeft = Math.max(1, dim - Math.max(1, elapsedDays) + 1);
   const expectedByNow = spendable * elapsedDays / dim;
-  const dailyAllowance = safeRemaining <= 0 ? 0 : Math.round(safeRemaining / daysLeft);
-  const weeklyAllowance = safeRemaining <= 0 ? 0 : Math.round(Math.min(safeRemaining, safeRemaining / daysLeft * 7));
 
   const byDay: Record<string, number> = {};
   log.forEach((e) => {
     byDay[e.date] = (byDay[e.date] || 0) + (e.amount || 0);
   });
 
-  let thisWeekSpent = 0;
-  if (isCurrent) {
-    const weekStart = mondayOf(todayStr);
-    const weekEnd = addDaysISO(weekStart, 6);
-    thisWeekSpent = log.reduce((s, e) => s + (e.date >= weekStart && e.date <= weekEnd ? (e.amount || 0) : 0), 0);
-  }
+  const week = isCurrent ? weekOf(m, monthKey, spendable, todayStr) : null;
+  const perDay = week ? week.perDay : Math.round(Math.max(0, spendable) / dim);
 
   return {
     carry,
+    income,
+    received: (m.incomes || []).reduce((s, x) => s + (x.date != null ? (x.amount || 0) : 0), 0),
     spendable,
     planned,
     buffer,
@@ -292,12 +373,12 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     committedLeft,
     safeRemaining,
     expectedByNow,
-    dailyAllowance,
-    weeklyAllowance,
-    thisWeekSpent,
+    week,
+    perDay,
     todaySpent: isCurrent ? (byDay[todayStr] || 0) : 0,
     byDay,
     dim,
+    elapsedDays,
     daysLeft,
     isCurrent,
     isFuture: monthKey > todayMonthKey
@@ -321,11 +402,41 @@ export function deriveMonth(state: State, monthKey: string): Derived {
   return derive(m, monthKey, m.cashStart ?? carryInto(state, monthKey));
 }
 
+/* --- month-end close --- */
+
+export function lastDayOf(monthKey: string): string {
+  return monthKey + '-' + pad(daysInMonth(monthKey));
+}
+
+/* The day the close is counted on: the month's last day, or today if it has not ended. */
+export function closeDate(monthKey: string): string {
+  const last = lastDayOf(monthKey);
+  const today = todayISO();
+  return today < last ? today : last;
+}
+
+/* Cash the ledger says should be left once `saved` has gone to savings. */
+export function bookBalance(state: State, monthKey: string, saved: number): number {
+  const m = state.months[monthKey];
+  const at = closeDate(monthKey);
+  return deriveMonth(state, monthKey).carry + receivedUpto(m, at) - spentUpto(m, at) - saved;
+}
+
+/* A month can be closed once it has ended, or in its last three days. */
+export function canClose(state: State, monthKey: string): boolean {
+  const m = state.months[monthKey];
+  if (!m || m.closed) return false;
+  const today = todayISO();
+  const current = today.slice(0, 7);
+  if (monthKey < current) return true;
+  return monthKey === current && daysInMonth(monthKey) - Number(today.slice(8, 10)) < 3;
+}
+
 export type Tone = 'good' | 'warn' | 'bad';
 
 export function tone(d: Derived): Tone {
   if (d.remaining <= 0) return 'bad';
-  if (d.safeRemaining <= 0 || d.actual > d.expectedByNow) return 'warn';
+  if (d.safeRemaining <= 0 || d.actual > d.expectedByNow || (d.week && d.week.left < 0)) return 'warn';
   return 'good';
 }
 
@@ -336,8 +447,9 @@ export function headline(d: Derived): string {
   }
   if (d.remaining <= 0) return 'বাজেট শেষ। এখন খরচ করলে সেভিংসে হাত পড়বে।';
   if (d.safeRemaining <= 0) return 'যা বাকি আছে পুরোটাই বাঁধা খরচে ধরা। নতুন কিছু কিনলে কোনো একটা বিল আটকে যাবে।';
-  if (d.todaySpent >= d.dailyAllowance) return 'আজকের ভাগ শেষ, ' + money(d.todaySpent) + ' খরচ হয়েছে।';
-  return 'আজ আরও ' + money(d.dailyAllowance - d.todaySpent) + ' খরচ করা যায়।';
+  if (d.week && d.week.left < 0) return 'এই সপ্তাহের ভাগ থেকে ' + money(-d.week.left) + ' বেশি গেছে।';
+  if (d.actual > d.expectedByNow) return 'মাসের গতির চেয়ে খরচ একটু বেশি হচ্ছে।';
+  return 'ঠিক পথে আছো।';
 }
 
 /* --- logging streak: a blank day must not read as a zero-spend day --- */

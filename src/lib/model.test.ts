@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { money } from './format';
 import {
-  blankMonth, carryInto, derive, deriveMonth, headline, makeNewMonth, migrate, reconRows,
-  streak, tone, type Month, type State
+  blankMonth, bookBalance, canClose, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
+  migrate, reconRows, streak, tone, type Month, type State
 } from './model';
 import { reducer } from '@/state/store';
 
 beforeEach(() => {
   vi.useFakeTimers();
-  // 2026-09-15 is a Tuesday; its week runs Mon 14 to Sun 20.
+  // 2026-09-15 is a Tuesday; its week runs Sat 12 to Fri 18.
   vi.setSystemTime(new Date(2026, 8, 15, 12));
 });
 
@@ -18,7 +18,7 @@ afterEach(() => {
 
 function september(): Month {
   const m = blankMonth();
-  m.income = 15000;
+  m.incomes = [{ id: 'I', name: 'income-a', amount: 15000, date: '2026-09-01', repeat: true }];
   m.savingsTarget = 2000;
   m.budget.needs = [{ id: 'A', name: 'line-a', amount: 2500, repeat: true }];
   m.budget.wants = [{ id: 'B', name: 'line-b', amount: 1000, repeat: false }];
@@ -53,26 +53,58 @@ describe('derive', () => {
     expect(d.perCategory.wants).toEqual({ planned: 1000, repeating: 0, actual: 300, committed: 0, unlinked: 300 });
     expect(d.daysLeft).toBe(16);
     expect(d.expectedByNow).toBe(6500);
-    expect(d.dailyAllowance).toBe(625);
-    expect(d.weeklyAllowance).toBe(4375);
-    expect(d.thisWeekSpent).toBe(500);
+    expect(d.week).toEqual({
+      start: '2026-09-12',
+      end: '2026-09-18',
+      days: ['2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'],
+      // Fixed on Saturday: (13000 - 1000 spent - 1500 still owed) / 19 days * 7.
+      budget: 3868,
+      spent: 500,
+      left: 3368,
+      perDay: 553
+    });
+    expect(d.perDay).toBe(553);
     expect(d.todaySpent).toBe(300);
     expect(d.isCurrent).toBe(true);
     expect(tone(d)).toBe('good');
-    expect(headline(d)).toBe('আজ আরও ৳৩২৫ খরচ করা যায়।');
+    expect(headline(d)).toBe('ঠিক পথে আছো।');
   });
 
   it('flags committed money that eats everything left', () => {
     const m = blankMonth();
-    m.income = 3000;
+    m.incomes = [{ id: 'I', name: '', amount: 3000, date: '2026-09-01', repeat: false }];
     m.budget.needs = [{ id: 'A', name: 'line-c', amount: 2500, repeat: true }];
     m.log = [{ id: 'e', date: '2026-09-02', name: '', cat: 'wants', amount: 1000, lineId: null }];
     const d = derive(m, '2026-09');
     expect(d.safeRemaining).toBe(-500);
-    expect(d.dailyAllowance).toBe(0);
-    expect(d.weeklyAllowance).toBe(0);
+    expect(d.week!.budget).toBe(0);
     expect(tone(d)).toBe('warn');
     expect(headline(d)).toBe('যা বাকি আছে পুরোটাই বাঁধা খরচে ধরা। নতুন কিছু কিনলে কোনো একটা বিল আটকে যাবে।');
+  });
+
+  it('keeps the week share fixed while spending inside the week', () => {
+    const m = september();
+    const before = derive(m, '2026-09').week!.budget;
+    m.log.push({ id: 'e4', date: '2026-09-15', name: '', cat: 'wants', amount: 2000, lineId: null });
+    const d = derive(m, '2026-09');
+    expect(d.week!.budget).toBe(before);
+    expect(d.week!.left).toBe(before - 2500);
+  });
+
+  it('cuts the week at the month start', () => {
+    vi.setSystemTime(new Date(2026, 9, 2, 12));
+    const m = blankMonth();
+    m.incomes = [{ id: 'I', name: '', amount: 3100, date: '2026-10-01', repeat: false }];
+    const week = derive(m, '2026-10').week!;
+    expect(week.days).toEqual(['2026-10-01', '2026-10-02']);
+    expect(week.budget).toBe(200);
+    expect(week.perDay).toBe(100);
+  });
+
+  it('flags a week that went over its share', () => {
+    const m = september();
+    m.log.push({ id: 'e4', date: '2026-09-13', name: '', cat: 'wants', amount: 3500, lineId: null });
+    expect(headline(derive(m, '2026-09'))).toBe('এই সপ্তাহের ভাগ থেকে ৳১৩২ বেশি গেছে।');
   });
 
   it('treats a future month as not started', () => {
@@ -86,7 +118,7 @@ describe('derive', () => {
 describe('carry', () => {
   it('carries a past deficit one level into the next month', () => {
     const aug = blankMonth();
-    aug.income = 1000;
+    aug.incomes = [{ id: 'I', name: '', amount: 1000, date: '2026-08-01', repeat: false }];
     aug.log = [{ id: 'x', date: '2026-08-10', name: '', cat: 'needs', amount: 1200, lineId: null }];
     const state: State = { activeMonth: '2026-09', months: { '2026-08': aug, '2026-09': september() } };
 
@@ -104,7 +136,7 @@ describe('carry', () => {
 
   it('uses cash in hand at the start instead of the carry when written', () => {
     const aug = blankMonth();
-    aug.income = 5000;
+    aug.incomes = [{ id: 'I', name: '', amount: 5000, date: '2026-08-01', repeat: false }];
     const state: State = { activeMonth: '2026-09', months: { '2026-08': aug, '2026-09': september() } };
     expect(deriveMonth(state, '2026-09').carry).toBe(5000);
 
@@ -134,6 +166,17 @@ describe('reconcile', () => {
     expect(rows[0]).toMatchObject({ expected: 12000, gap: 0 });
   });
 
+  it('counts income only from the day it arrived', () => {
+    const m = september();
+    m.cashStart = 0;
+    m.incomes.push({ id: 'J', name: 'income-b', amount: 4000, date: '2026-09-12', repeat: false });
+    m.incomes.push({ id: 'K', name: 'income-c', amount: 9000, date: null, repeat: false });
+    expect(expectedAt(m, '2026-09-11')).toBe(15000 - 1000);
+    expect(expectedAt(m, '2026-09-12')).toBe(19000 - 1000);
+    expect(derive(m, '2026-09').income).toBe(28000);
+    expect(derive(m, '2026-09').received).toBe(19000);
+  });
+
   it('fills a gap as one unexpected entry', () => {
     const m = september();
     m.cashStart = 500;
@@ -149,7 +192,7 @@ describe('reconcile', () => {
 describe('months', () => {
   it('opens a new month with only repeating lines', () => {
     const n = makeNewMonth(september());
-    expect(n.income).toBe(15000);
+    expect(n.incomes).toMatchObject([{ name: 'income-a', amount: 15000, date: null, repeat: true }]);
     expect(n.savingsTarget).toBe(2000);
     expect(n.budget.needs.map((l) => l.name)).toEqual(['line-a']);
     expect(n.budget.needs[0].id).not.toBe('A');
@@ -198,6 +241,9 @@ describe('months', () => {
       months: { '2026-09': { income: 1, savingsTarget: 0, log: [{ id: 'a', date: '2026-09-03', cat: 'needs', amount: 5 }] } }
     });
     const m = s.months['2026-09'];
+    expect(m.incomes).toEqual([{ id: 'income-2026-09', name: 'আয়', amount: 1, date: '2026-09-01', repeat: true }]);
+    expect('income' in m).toBe(false);
+    expect(m.closed).toBe(false);
     expect(m.log[0].lineId).toBeNull();
     expect(m.loggedDays).toEqual(['2026-09-03']);
     expect(m.budget.giving).toEqual([]);
@@ -218,7 +264,7 @@ describe('lock', () => {
   it('refuses plan edits while locked', () => {
     const state = locked();
     expect(reducer(state, { type: 'updateLine', cat: 'needs', id: 'A', amount: 9999 })).toBe(state);
-    expect(reducer(state, { type: 'setIncome', value: 1 })).toBe(state);
+    expect(reducer(state, { type: 'setSavingsTarget', value: 1 })).toBe(state);
   });
 
   it('still takes spending while locked', () => {
@@ -229,13 +275,93 @@ describe('lock', () => {
   it('takes plan edits again once unlocked', () => {
     const open = reducer(locked(), { type: 'setLocked', value: false });
     expect(open.months['2026-09'].locked).toBe(false);
-    expect(reducer(open, { type: 'setIncome', value: 1 }).months['2026-09'].income).toBe(1);
+    expect(reducer(open, { type: 'setSavingsTarget', value: 1 }).months['2026-09'].savingsTarget).toBe(1);
   });
 
   it('opens a new month unlocked', () => {
     const m = september();
     m.locked = true;
     expect(makeNewMonth(m).locked).toBe(false);
+  });
+});
+
+describe('income', () => {
+  it('adds a mid-month income and moves part of it to savings', () => {
+    const state: State = { activeMonth: '2026-09', months: { '2026-09': september() } };
+    const next = reducer(state, {
+      type: 'addIncome', name: 'income-b', amount: 5000, date: '2026-09-15', repeat: false, toSavings: 2000
+    });
+    const m = next.months['2026-09'];
+    expect(m.incomes.at(-1)).toMatchObject({ name: 'income-b', amount: 5000, date: '2026-09-15' });
+    expect(m.savingsTarget).toBe(4000);
+    expect(derive(m, '2026-09').spendable).toBe(16000);
+  });
+
+  it('takes income while the plan is locked', () => {
+    const m = september();
+    m.locked = true;
+    const next = reducer({ activeMonth: '2026-09', months: { '2026-09': m } }, {
+      type: 'addIncome', name: '', amount: 100, date: '2026-09-15', repeat: false, toSavings: 0
+    });
+    expect(next.months['2026-09'].incomes).toHaveLength(2);
+  });
+
+  it('marks an expected income as arrived', () => {
+    const m = september();
+    m.incomes[0].date = null;
+    const next = reducer({ activeMonth: '2026-09', months: { '2026-09': m } }, { type: 'receiveIncome', id: 'I', date: '2026-09-05' });
+    expect(next.months['2026-09'].incomes[0].date).toBe('2026-09-05');
+  });
+});
+
+describe('close', () => {
+  function withAugust(): State {
+    const aug = blankMonth();
+    aug.incomes = [{ id: 'I', name: 'income-a', amount: 10000, date: '2026-08-01', repeat: true }];
+    aug.savingsTarget = 2000;
+    aug.cashStart = 500;
+    aug.log = [{ id: 'x', date: '2026-08-10', name: '', cat: 'needs', amount: 7000, lineId: null }];
+    return { activeMonth: '2026-08', months: { '2026-08': aug } };
+  }
+
+  it('knows when a month can be closed', () => {
+    const state = withAugust();
+    state.months['2026-09'] = september();
+    expect(canClose(state, '2026-08')).toBe(true);
+    expect(canClose(state, '2026-09')).toBe(false);
+    vi.setSystemTime(new Date(2026, 8, 28, 12));
+    expect(canClose(state, '2026-09')).toBe(true);
+    state.months['2026-08'].closed = true;
+    expect(canClose(state, '2026-08')).toBe(false);
+  });
+
+  it('closes a month and starts the next from the counted cash', () => {
+    const state = withAugust();
+    expect(bookBalance(state, '2026-08', 2000)).toBe(1500);
+    const next = reducer(state, {
+      type: 'closeMonth', month: '2026-08', saved: 2000, cash: 1200, forward: 1200, fillGap: 300, reflection: 'note', nextSavingsTarget: 2500
+    });
+    const aug = next.months['2026-08'];
+    expect(aug).toMatchObject({ saved: 2000, reflection: 'note', closed: true, locked: true });
+    expect(aug.log.at(-1)).toMatchObject({ date: '2026-08-31', name: 'অজানা খরচ', amount: 300 });
+    expect(aug.checks).toMatchObject([{ date: '2026-08-31', amount: 1200 }]);
+    expect(expectedAt(aug, '2026-08-31')).toBe(1200);
+    expect(next.activeMonth).toBe('2026-09');
+    expect(next.months['2026-09']).toMatchObject({ cashStart: 1200, savingsTarget: 2500, closed: false });
+    expect(next.months['2026-09'].incomes).toMatchObject([{ name: 'income-a', date: null }]);
+  });
+
+  it('keeps a locked next month plan and carries the ledger figure when cash is not counted', () => {
+    const state = withAugust();
+    const sep = september();
+    sep.locked = true;
+    state.months['2026-09'] = sep;
+    const next = reducer(state, {
+      type: 'closeMonth', month: '2026-08', saved: 2000, cash: null, forward: 1500, fillGap: 0, reflection: '', nextSavingsTarget: 9
+    });
+    expect(next.months['2026-09'].savingsTarget).toBe(2000);
+    expect(next.months['2026-09'].cashStart).toBe(1500);
+    expect(next.months['2026-08'].checks).toEqual([]);
   });
 });
 
@@ -261,6 +387,13 @@ describe('undo', () => {
     const check = before.months['2026-09'].checks[0];
     const gone = reducer(before, { type: 'deleteCheck', id: check.id });
     expect(reducer(gone, { type: 'restoreCheck', month: '2026-09', check, index: 0 })).toEqual(before);
+  });
+
+  it('puts a deleted income back in place', () => {
+    const before = state();
+    const income = before.months['2026-09'].incomes[0];
+    const gone = reducer(before, { type: 'deleteIncome', id: income.id });
+    expect(reducer(gone, { type: 'restoreIncome', month: '2026-09', income, index: 0 })).toEqual(before);
   });
 
   it('puts a deleted plan line back in place', () => {

@@ -17,7 +17,7 @@ export function Ledger({ log, days }: { log: LogEntry[]; days?: number }) {
   }
 
   if (!log.length) {
-    return <p className="py-6 text-center font-light text-muted-foreground">উপরে প্রথম খরচটা লিখে ফেলো, দিনের হিসাব এখানে জমবে।</p>;
+    return <p className="py-6 text-center font-light text-muted-foreground">এখনো কোনো খরচ লেখা হয়নি। + চেপে প্রথম খরচটা লিখে ফেলো।</p>;
   }
 
   const sorted = log.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));

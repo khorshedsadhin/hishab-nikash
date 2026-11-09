@@ -12,9 +12,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function remote(month: string, updatedAt: string, income: number): RemoteMonth {
+function remote(month: string, updatedAt: string, savingsTarget: number): RemoteMonth {
   const value = blankMonth();
-  value.income = income;
+  value.savingsTarget = savingsTarget;
   return { month, updatedAt, value };
 }
 
@@ -28,7 +28,7 @@ describe('sync', () => {
 
   it('takes remote months that are not edited locally', () => {
     const { taken, dirty } = mergeRemote([remote('2026-09', '2026-09-10T00:00:00.000Z', 100)], {});
-    expect(taken['2026-09']?.income).toBe(100);
+    expect(taken['2026-09']?.savingsTarget).toBe(100);
     expect(dirty).toEqual({});
   });
 
@@ -36,7 +36,7 @@ describe('sync', () => {
     const { taken, dirty } = mergeRemote([remote('2026-09', '2026-09-10T00:00:00.000Z', 100)], {
       '2026-09': '2026-09-09T00:00:00.000Z'
     });
-    expect(taken['2026-09']?.income).toBe(100);
+    expect(taken['2026-09']?.savingsTarget).toBe(100);
     expect(dirty).toEqual({});
   });
 
@@ -57,11 +57,11 @@ describe('sync', () => {
   it('merges remote months into state and keeps the active month', () => {
     const state: State = { activeMonth: '2026-08', months: { '2026-08': blankMonth(), '2026-09': blankMonth() } };
     const value = blankMonth();
-    value.income = 500;
+    value.savingsTarget = 500;
     const next = reducer(state, { type: 'mergeRemote', months: { '2026-09': value } });
     expect(next.activeMonth).toBe('2026-08');
     expect(next.months['2026-08']).toBe(state.months['2026-08']);
-    expect(next.months['2026-09'].income).toBe(500);
+    expect(next.months['2026-09'].savingsTarget).toBe(500);
   });
 
   it('takes a remote delete unless the local edit is newer', () => {
@@ -91,7 +91,7 @@ describe('deleteMonth', () => {
 
   it('leaves a blank current month when the last month is deleted', () => {
     const m = blankMonth();
-    m.income = 500;
+    m.savingsTarget = 500;
     const next = reducer({ activeMonth: '2026-05', months: { '2026-05': m } }, { type: 'deleteMonth' });
     expect(next.activeMonth).toBe('2026-09');
     expect(next.months).toEqual({ '2026-09': blankMonth() });

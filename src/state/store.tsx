@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
-  blankMonth, expectedAt, makeNewMonth, migrate, type Check, type Line, type LogEntry, type Month, type State
+  blankMonth, closeDate, expectedAt, makeNewMonth, migrate,
+  type Check, type Income, type Line, type LogEntry, type Month, type State
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
@@ -13,7 +14,25 @@ export type Action =
   | { type: 'deleteCheck'; id: string }
   | { type: 'markZeroDay' }
   | { type: 'fillGap'; checkId: string }
-  | { type: 'setIncome'; value: number }
+  | { type: 'addIncome'; id?: string; name: string; amount: number; date: string | null; repeat: boolean; toSavings: number }
+  | { type: 'updateIncome'; id: string; name?: string; amount?: number }
+  | { type: 'receiveIncome'; id: string; date: string | null }
+  | { type: 'toggleIncomeRepeat'; id: string }
+  | { type: 'deleteIncome'; id: string }
+  | { type: 'restoreIncome'; month: string; income: Income; index: number }
+  | {
+      type: 'closeMonth';
+      month: string;
+      saved: number;
+      /* Cash counted on the close date, after `saved` left; null when not counted. */
+      cash: number | null;
+      /* What the next month starts with: the counted cash, or the ledger's figure. */
+      forward: number;
+      fillGap: number;
+      reflection: string;
+      nextSavingsTarget: number;
+    }
+  | { type: 'reopenMonth' }
   | { type: 'setSavingsTarget'; value: number }
   | { type: 'setCashStart'; value: number | null }
   | { type: 'setSaved'; value: number | null }
@@ -34,7 +53,7 @@ export type Action =
   | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
 /* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
-const PLAN_EDITS = ['setIncome', 'setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
+const PLAN_EDITS = ['setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
 
 /* The app always needs an active month, so dropping the last one leaves a blank current month. */
 function dropMonth(state: State, key: string) {
@@ -120,8 +139,74 @@ export function reducer(prev: State, action: Action): State {
       markLogged(m, check.date);
       break;
     }
-    case 'setIncome':
-      m.income = action.value;
+    /* Income is a fact, not a plan promise, so the lock does not hold it back. */
+    case 'addIncome': {
+      const target = action.date ? state.months[action.date.slice(0, 7)] : m;
+      if (!target) return prev;
+      target.incomes.push({
+        id: action.id ?? uid(),
+        name: action.name.trim(),
+        amount: action.amount,
+        date: action.date,
+        repeat: action.repeat
+      });
+      if (action.toSavings > 0) target.savingsTarget += Math.min(action.toSavings, action.amount);
+      break;
+    }
+    case 'updateIncome': {
+      const income = m.incomes.find((x) => x.id === action.id);
+      if (!income) return prev;
+      if (action.name !== undefined) income.name = action.name;
+      if (action.amount !== undefined) income.amount = action.amount;
+      break;
+    }
+    case 'receiveIncome': {
+      const income = m.incomes.find((x) => x.id === action.id);
+      if (!income) return prev;
+      income.date = action.date;
+      break;
+    }
+    case 'toggleIncomeRepeat': {
+      const income = m.incomes.find((x) => x.id === action.id);
+      if (income) income.repeat = !income.repeat;
+      break;
+    }
+    case 'deleteIncome':
+      m.incomes = m.incomes.filter((x) => x.id !== action.id);
+      break;
+    case 'restoreIncome': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.incomes.splice(action.index, 0, action.income);
+      break;
+    }
+    /* Closing writes the month's last facts and starts the next month from the counted cash. */
+    case 'closeMonth': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      const at = closeDate(action.month);
+      target.saved = action.saved;
+      target.reflection = action.reflection;
+      if (action.fillGap > 0) {
+        target.log.push({ id: uid(), date: at, name: 'অজানা খরচ', cat: 'unexpected', amount: action.fillGap, lineId: null });
+        markLogged(target, at);
+      }
+      if (action.cash != null) {
+        target.checks = (target.checks || []).filter((c) => c.date !== at);
+        target.checks.push({ id: uid(), date: at, amount: action.cash });
+      }
+      target.closed = true;
+      target.locked = true;
+      const nextKey = nextMonthKey(action.month);
+      if (!state.months[nextKey]) state.months[nextKey] = makeNewMonth(target);
+      const next = state.months[nextKey];
+      next.cashStart = action.forward;
+      if (!next.locked) next.savingsTarget = action.nextSavingsTarget;
+      state.activeMonth = nextKey;
+      break;
+    }
+    case 'reopenMonth':
+      m.closed = false;
       break;
     case 'setSavingsTarget':
       m.savingsTarget = action.value;

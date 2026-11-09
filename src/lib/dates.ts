@@ -34,12 +34,17 @@ export function daysApart(from: string, to: string): number {
   return Math.round((db.getTime() - da.getTime()) / 86400000);
 }
 
-export function mondayOf(dateStr: string): string {
+/* Weeks run Saturday to Friday. */
+export function saturdayOf(dateStr: string): string {
   const [y, m, day] = dateStr.split('-').map(Number);
   const d = new Date(y, m - 1, day);
-  const dow = d.getDay();
-  d.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow));
+  d.setDate(d.getDate() - ((d.getDay() + 1) % 7));
   return isoFromDate(d);
+}
+
+export function weekdayOf(dateStr: string): number {
+  const [y, m, day] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, day).getDay();
 }
 
 export function nextMonthKey(monthKey: string): string {

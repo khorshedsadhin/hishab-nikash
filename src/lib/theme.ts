@@ -9,8 +9,15 @@ function current(): Theme {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
+/* Keeps the browser bar in step with the page background. */
+export function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', getComputedStyle(document.body).backgroundColor);
+}
+
 export function setTheme(theme: Theme) {
   document.documentElement.classList.toggle('dark', theme === 'dark');
+  syncThemeColor();
   try {
     localStorage.setItem(THEME_KEY, theme);
   } catch {

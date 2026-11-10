@@ -1,0 +1,15 @@
+{
+  "name": "হিসাব · Hishab",
+  "short_name": "হিসাব",
+  "description": "Monthly budget planner and daily spending log.",
+  "lang": "bn",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -34,3 +34,13 @@ export function dayLabel(dateStr: string): string {
   const parts = dateStr.split('-');
   return toBn(Number(parts[2])) + ' ' + BN_MONTHS[Number(parts[1]) - 1];
 }
+
+/* Reads Bangla or ASCII digits back as ASCII. */
+export function fromBn(s: string): string {
+  return s.replace(/[০-৯]/g, (d) => String(BN_DIGITS.indexOf(d)));
+}
+
+export function shortDay(dateStr: string): string {
+  const parts = dateStr.split('-');
+  return toBn(Number(parts[2])) + ' ' + BN_MONTHS[Number(parts[1]) - 1].slice(0, 3);
+}

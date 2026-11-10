@@ -10,6 +10,7 @@ import { startSync, trackState } from '@/lib/sync';
 export type Action =
   | { type: 'addSpend'; date: string; cat: string; amount: number; pick: string; name: string }
   | { type: 'addCheck'; date: string; amount: number }
+  | { type: 'updateLog'; id: string; date: string; cat: string; amount: number; pick: string; name: string }
   | { type: 'deleteLog'; id: string }
   | { type: 'deleteCheck'; id: string }
   | { type: 'markZeroDay' }
@@ -47,6 +48,7 @@ export type Action =
   | { type: 'importState'; state: State }
   | { type: 'deleteMonth' }
   | { type: 'restoreLog'; month: string; entry: LogEntry; index: number }
+  | { type: 'restoreLogList'; month: string; log: LogEntry[]; loggedDays: string[] }
   | { type: 'restoreCheck'; month: string; check: Check; index: number }
   | { type: 'restoreLine'; month: string; cat: string; line: Line; index: number }
   | { type: 'restoreMonth'; key: string; month: Month }
@@ -118,6 +120,24 @@ export function reducer(prev: State, action: Action): State {
       m.checks = (m.checks || []).filter((c) => c.date !== action.date);
       m.checks.push({ id: uid(), date: action.date, amount: action.amount });
       break;
+    /* An edited entry may move to another month; there its plan-line link would be stale. */
+    case 'updateLog': {
+      const entry = m.log.find((e) => e.id === action.id);
+      const target = state.months[action.date.slice(0, 7)];
+      if (!entry || !target || action.amount <= 0) return prev;
+      const line = action.pick ? (m.budget[action.cat] || []).find((l) => l.id === action.pick) : undefined;
+      entry.date = action.date;
+      entry.cat = action.cat;
+      entry.amount = action.amount;
+      entry.lineId = line && target === m ? line.id : null;
+      entry.name = line ? line.name : action.name.trim();
+      if (target !== m) {
+        m.log = m.log.filter((e) => e.id !== action.id);
+        target.log.push(entry);
+      }
+      markLogged(target, action.date);
+      break;
+    }
     case 'deleteLog':
       m.log = m.log.filter((e) => e.id !== action.id);
       break;
@@ -252,6 +272,14 @@ export function reducer(prev: State, action: Action): State {
       const target = state.months[action.month];
       if (!target) return prev;
       target.log.splice(action.index, 0, action.entry);
+      break;
+    }
+    /* Undo of an add: the add may have merged into an existing entry, so the list comes back whole. */
+    case 'restoreLogList': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.log = action.log;
+      target.loggedDays = action.loggedDays;
       break;
     }
     case 'restoreCheck': {

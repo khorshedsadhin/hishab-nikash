@@ -16,6 +16,13 @@ export function EntrySheet({ open, onOpenChange, mode, onMode, m, d }: {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        onOpenAutoFocus={(e) => {
+          const amount = (e.currentTarget as HTMLElement | null)?.querySelector<HTMLInputElement>('[data-amount]');
+          if (amount) {
+            e.preventDefault();
+            amount.focus();
+          }
+        }}
         className="max-h-[92dvh] gap-4 overflow-y-auto rounded-3xl bg-card p-5 sm:max-w-md max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none max-sm:pb-[calc(1.25rem+env(safe-area-inset-bottom))]"
       >
         <div>

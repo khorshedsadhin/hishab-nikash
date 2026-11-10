@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { money } from './format';
 import {
   blankMonth, bookBalance, canClose, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
-  migrate, reconRows, streak, tone, type Month, type State
+  isBlank, migrate, reconRows, streak, tone, type Month, type State
 } from './model';
 import { reducer } from '@/state/store';
 
@@ -445,5 +445,71 @@ describe('streak', () => {
       text: 'শেষ লেখা ৪ দিন আগে · ১১ সেপ্টেম্বর',
       warn: true
     });
+  });
+});
+
+describe('repeating lines', () => {
+  it('keeps a repeating payment out of the week and the pace', () => {
+    const m = september();
+    m.log.push({ id: 'e4', date: '2026-09-13', name: 'line-a', cat: 'needs', amount: 1500, lineId: 'A' });
+    const d = derive(m, '2026-09');
+    expect(d.week!.spent).toBe(500);
+    expect(d.flexSpent).toBe(500);
+    expect(d.fixedByDay['2026-09-13']).toBe(1500);
+    expect(d.flexByDay['2026-09-13']).toBeUndefined();
+    expect(tone(d)).toBe('good');
+  });
+
+  it('counts paying past the line amount as day-to-day spending', () => {
+    const m = september();
+    m.log.push({ id: 'e4', date: '2026-09-13', name: 'line-a', cat: 'needs', amount: 2000, lineId: 'A' });
+    const d = derive(m, '2026-09');
+    expect(d.fixedByDay['2026-09-13']).toBe(1500);
+    expect(d.flexByDay['2026-09-13']).toBe(500);
+    expect(d.week!.spent).toBe(1000);
+  });
+
+  it('warns when day-to-day spending runs ahead of the month', () => {
+    const m = september();
+    m.log.push({ id: 'e4', date: '2026-09-02', name: '', cat: 'wants', amount: 5000, lineId: null });
+    expect(tone(derive(m, '2026-09'))).toBe('warn');
+  });
+});
+
+describe('isBlank', () => {
+  it('is true only for a month with nothing in it', () => {
+    expect(isBlank(blankMonth())).toBe(true);
+    expect(isBlank(september())).toBe(false);
+  });
+});
+
+describe('updateLog', () => {
+  const state = (): State => ({ activeMonth: '2026-09', months: { '2026-08': blankMonth(), '2026-09': september() } });
+
+  it('changes an entry in place', () => {
+    const next = reducer(state(), { type: 'updateLog', id: 'e2', date: '2026-09-14', cat: 'needs', amount: 450, pick: 'A', name: '' });
+    expect(next.months['2026-09'].log.find((e) => e.id === 'e2')).toEqual({
+      id: 'e2', date: '2026-09-14', name: 'line-a', cat: 'needs', amount: 450, lineId: 'A'
+    });
+  });
+
+  it('moves an entry to another month and drops its line link', () => {
+    const next = reducer(state(), { type: 'updateLog', id: 'e1', date: '2026-08-31', cat: 'needs', amount: 1000, pick: 'A', name: '' });
+    expect(next.months['2026-09'].log.some((e) => e.id === 'e1')).toBe(false);
+    expect(next.months['2026-08'].log).toEqual([{ id: 'e1', date: '2026-08-31', name: 'line-a', cat: 'needs', amount: 1000, lineId: null }]);
+    expect(next.months['2026-08'].loggedDays).toEqual(['2026-08-31']);
+  });
+
+  it('refuses a zero amount', () => {
+    const s = state();
+    expect(reducer(s, { type: 'updateLog', id: 'e2', date: '2026-09-15', cat: 'wants', amount: 0, pick: '', name: '' })).toBe(s);
+  });
+
+  it('undoes an add that merged into an existing entry', () => {
+    const before = state();
+    const m = before.months['2026-09'];
+    const added = reducer(before, { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: 'entry-2' });
+    const back = reducer(added, { type: 'restoreLogList', month: '2026-09', log: m.log, loggedDays: m.loggedDays });
+    expect(back).toEqual(before);
   });
 });

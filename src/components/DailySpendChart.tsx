@@ -7,6 +7,7 @@ interface Day {
   day: number;
   date: string;
   amt: number;
+  bill: number;
   /* Striped stub, only for past days with nothing written. */
   ghost: number;
   unlogged: boolean;
@@ -16,20 +17,22 @@ interface Day {
 export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; monthKey: string }) {
   const todayStr = todayISO();
   const logged = new Set(m.loggedDays || []);
-  const max = Math.max(0, ...Object.values(d.byDay));
+  const max = Math.max(0, ...Object.values(d.flexByDay));
   const par = d.perDay;
   const scale = Math.max(max, par * 1.5, 1);
 
   const data: Day[] = [];
   for (let i = 1; i <= d.dim; i++) {
     const date = monthKey + '-' + pad(i);
-    const amt = d.byDay[date] || 0;
-    const unlogged = date <= todayStr && !amt && !logged.has(date);
+    /* Repeating lines are planned, so the bars show day-to-day spending only; the tooltip still names them. */
+    const amt = d.flexByDay[date] || 0;
+    const bill = d.fixedByDay[date] || 0;
+    const unlogged = date <= todayStr && !d.byDay[date] && !logged.has(date);
     let color = 'color-mix(in srgb, var(--muted-foreground) 45%, transparent)';
     if (date > todayStr) color = 'var(--track)';
     if (amt > par) color = 'var(--warning)';
     if (date === todayStr) color = 'var(--primary)';
-    data.push({ day: i, date, amt, ghost: unlogged ? scale * 0.25 : 0, unlogged, color });
+    data.push({ day: i, date, amt, bill, ghost: unlogged ? scale * 0.25 : 0, unlogged, color });
   }
 
   return (
@@ -50,7 +53,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
               tickFormatter={(v: number) => toBn(v)}
               tickLine={false}
               axisLine={{ stroke: 'var(--border)' }}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+              tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
               interval="preserveStartEnd"
               minTickGap={8}
             />
@@ -64,6 +67,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
                   <div className="rounded-md border bg-popover px-3 py-2 text-sm shadow-md">
                     <div className="text-muted-foreground">{dayLabel(p.date)}</div>
                     <div className="font-fig text-base">{p.unlogged ? 'লেখা হয়নি' : money(p.amt)}</div>
+                    {p.bill > 0 && <div className="text-xs text-muted-foreground">বাঁধা খরচ {money(p.bill)} আলাদা</div>}
                   </div>
                 );
               }}
@@ -76,7 +80,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-light text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <span className="inline-block w-5 border-t-2 border-dashed border-muted-foreground/60" />
           দিনে ধরা {money(par)}
@@ -85,6 +89,7 @@ export function DailySpendChart({ m, d, monthKey }: { m: Month; d: Derived; mont
           <svg width="10" height="10" aria-hidden><rect width="10" height="10" fill="url(#unlogged)" /></svg>
           লেখা হয়নি
         </span>
+        <span>বাঁধা খরচ বাদে</span>
       </div>
     </div>
   );

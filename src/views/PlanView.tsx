@@ -10,13 +10,13 @@ import { NumberInput } from '@/components/NumberInput';
 import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { prevMonthKey, todayISO, uid } from '@/lib/dates';
-import { dayLabel, money, monthLabel, toBn } from '@/lib/format';
+import { money, monthLabel, shortDay, toBn } from '@/lib/format';
 import { CATEGORIES, carryInto, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
-const ghostInput = 'h-9 border-transparent bg-transparent shadow-none focus-visible:border-input dark:bg-transparent';
+const ghostInput = 'h-9 border-transparent bg-transparent shadow-none hover:border-input focus-visible:border-input dark:bg-transparent disabled:cursor-default disabled:opacity-100';
 
 export function PlanView({ m, d }: { m: Month; d: Derived }) {
   const { state, dispatch } = useStore();
@@ -44,6 +44,12 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
         <p className="-mt-2 mb-5 text-sm text-warning">মাস শুরু হয়ে গেছে। প্ল্যান ঠিক হলে লক করে দাও, তাহলে মাঝপথে বদলাবে না।</p>
       )}
       {m.closed && <p className="-mt-2 mb-5 text-sm text-muted-foreground">এই মাস বন্ধ করা হয়েছে।</p>}
+      {locked && !m.closed && (
+        <p className="-mt-2 mb-5 flex items-center gap-2 text-sm text-muted-foreground">
+          <Lock className="size-3.5 shrink-0" />
+          প্ল্যান লক করা, তাই লাইন বদলানো যাবে না। খরচ লেখা চলবে।
+        </p>
+      )}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel className="xl:col-span-2">
@@ -102,6 +108,10 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                   : d.buffer > 0
                     ? money(d.buffer) + ' এখনো কোনো খাতে ভাগ হয়নি।'
                     : 'সব টাকা খাতে ভাগ হয়ে গেছে।'}
+              </p>
+              <p className="flex items-center gap-2 border-t pt-3 text-xs text-muted-foreground">
+                <Repeat className="size-3.5 shrink-0 text-primary" />
+                এই চিহ্ন দেওয়া লাইন প্রতি মাসের বাঁধা খরচ। পরের মাসেও আপনা থেকে আসবে।
               </p>
           </div>
         </Panel>
@@ -213,11 +223,6 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
         </Panel>
       </div>
 
-      <p className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
-        <Repeat className="size-3.5" />
-        চিহ্ন দেওয়া লাইন প্রতি মাসের বাঁধা খরচ, পরের মাসেও আপনা থেকে আসবে।
-      </p>
-
       <AlertDialog open={asking} onOpenChange={setAsking}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -319,18 +324,20 @@ function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
               <button
                 type="button"
                 title="আসেনি হিসেবে ফেরাও"
+                aria-label={'এসেছে ' + shortDay(x.date) + '। আসেনি হিসেবে ফেরাও'}
                 onClick={() => dispatch({ type: 'receiveIncome', id: x.id, date: null })}
-                className="min-h-8 w-24 shrink-0 rounded-full bg-success/12 px-2 text-xs text-success"
+                className="min-h-8 w-28 shrink-0 rounded-full bg-success/12 px-2 text-xs text-success"
               >
-                এসেছে {dayLabel(x.date).split(' ')[0]}
+                এসেছে {shortDay(x.date)}
               </button>
             ) : (
               <button
                 type="button"
+                title="আসবে। এলে চাপো"
                 onClick={() => dispatch({ type: 'receiveIncome', id: x.id, date: arrivalDate() })}
-                className="min-h-8 w-24 shrink-0 rounded-full border border-dashed border-input px-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
+                className="min-h-8 w-28 shrink-0 rounded-full border border-dashed border-input px-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
               >
-                আসবে · এলো?
+                এলে চাপো
               </button>
             )}
             {!locked && (

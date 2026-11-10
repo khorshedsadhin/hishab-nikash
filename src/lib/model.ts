@@ -236,6 +236,12 @@ export interface Derived {
   committedLeft: number;
   safeRemaining: number;
   expectedByNow: number;
+  /* Spending outside repeating lines, the part that pace and the week watch. */
+  flexBudget: number;
+  flexSpent: number;
+  flexExpected: number;
+  flexByDay: Record<string, number>;
+  fixedByDay: Record<string, number>;
   week: Week | null;
   perDay: number;
   todaySpent: number;
@@ -258,8 +264,30 @@ function committedFrom(m: Month, lineSpent: Record<string, number>): number {
   return total;
 }
 
+/* The share of each entry that pays a repeating line, up to the line's amount, in date order. */
+export function fixedShares(m: Month): Record<string, number> {
+  const repeatAmount: Record<string, number> = {};
+  CATEGORIES.forEach((c) => {
+    (m.budget[c.key] || []).forEach((l) => {
+      if (l.repeat) repeatAmount[l.id] = l.amount;
+    });
+  });
+  const paid: Record<string, number> = {};
+  const out: Record<string, number> = {};
+  (m.log || []).slice()
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    .forEach((e) => {
+      if (!e.lineId || repeatAmount[e.lineId] == null) return;
+      const room = Math.max(0, repeatAmount[e.lineId] - (paid[e.lineId] || 0));
+      const share = Math.min(room, e.amount || 0);
+      paid[e.lineId] = (paid[e.lineId] || 0) + (e.amount || 0);
+      if (share > 0) out[e.id] = share;
+    });
+  return out;
+}
+
 /* The week's share is fixed on its first day, so spending inside the week never moves the target. */
-function weekOf(m: Month, monthKey: string, spendable: number, todayStr: string): Week {
+function weekOf(m: Month, monthKey: string, spendable: number, todayStr: string, fixed: Record<string, number>): Week {
   const dim = daysInMonth(monthKey);
   const first = monthKey + '-01';
   const last = lastDayOf(monthKey);
@@ -276,7 +304,8 @@ function weekOf(m: Month, monthKey: string, spendable: number, todayStr: string)
       spentBefore += e.amount || 0;
       if (e.lineId) before[e.lineId] = (before[e.lineId] || 0) + (e.amount || 0);
     } else if (e.date <= end) {
-      spent += e.amount || 0;
+      /* Paying a repeating line is already held aside, so it does not eat the week's share. */
+      spent += (e.amount || 0) - (fixed[e.id] || 0);
     }
   });
 
@@ -350,12 +379,23 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
   const daysLeft = Math.max(1, dim - Math.max(1, elapsedDays) + 1);
   const expectedByNow = spendable * elapsedDays / dim;
 
+  const fixed = fixedShares(m);
   const byDay: Record<string, number> = {};
+  const flexByDay: Record<string, number> = {};
+  const fixedByDay: Record<string, number> = {};
+  let fixedPaid = 0;
   log.forEach((e) => {
+    const f = fixed[e.id] || 0;
     byDay[e.date] = (byDay[e.date] || 0) + (e.amount || 0);
+    if (f) fixedByDay[e.date] = (fixedByDay[e.date] || 0) + f;
+    if ((e.amount || 0) - f) flexByDay[e.date] = (flexByDay[e.date] || 0) + (e.amount || 0) - f;
+    fixedPaid += f;
   });
+  const flexBudget = spendable - repeating;
+  const flexSpent = actual - fixedPaid;
+  const flexExpected = Math.max(0, flexBudget) * elapsedDays / dim;
 
-  const week = isCurrent ? weekOf(m, monthKey, spendable, todayStr) : null;
+  const week = isCurrent ? weekOf(m, monthKey, spendable, todayStr, fixed) : null;
   const perDay = week ? week.perDay : Math.round(Math.max(0, spendable) / dim);
 
   return {
@@ -373,6 +413,11 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     committedLeft,
     safeRemaining,
     expectedByNow,
+    flexBudget,
+    flexSpent,
+    flexExpected,
+    flexByDay,
+    fixedByDay,
     week,
     perDay,
     todaySpent: isCurrent ? (byDay[todayStr] || 0) : 0,
@@ -434,9 +479,15 @@ export function canClose(state: State, monthKey: string): boolean {
 
 export type Tone = 'good' | 'warn' | 'bad';
 
+/* Nothing planned and nothing written: the month still needs setting up. */
+export function isBlank(m: Month): boolean {
+  return incomeTotal(m) === 0 && (m.log || []).length === 0 &&
+    CATEGORIES.every((c) => (m.budget[c.key] || []).every((l) => !l.amount));
+}
+
 export function tone(d: Derived): Tone {
   if (d.remaining <= 0) return 'bad';
-  if (d.safeRemaining <= 0 || d.actual > d.expectedByNow || (d.week && d.week.left < 0)) return 'warn';
+  if (d.safeRemaining <= 0 || d.flexSpent > d.flexExpected || (d.week && d.week.left < 0)) return 'warn';
   return 'good';
 }
 
@@ -448,7 +499,7 @@ export function headline(d: Derived): string {
   if (d.remaining <= 0) return 'বাজেট শেষ। এখন খরচ করলে সেভিংসে হাত পড়বে।';
   if (d.safeRemaining <= 0) return 'যা বাকি আছে পুরোটাই বাঁধা খরচে ধরা। নতুন কিছু কিনলে কোনো একটা বিল আটকে যাবে।';
   if (d.week && d.week.left < 0) return 'এই সপ্তাহের ভাগ থেকে ' + money(-d.week.left) + ' বেশি গেছে।';
-  if (d.actual > d.expectedByNow) return 'মাসের গতির চেয়ে খরচ একটু বেশি হচ্ছে।';
+  if (d.flexSpent > d.flexExpected) return 'দৈনিক খরচ মাসের গতির চেয়ে একটু বেশি হচ্ছে।';
   return 'ঠিক পথে আছো।';
 }
 

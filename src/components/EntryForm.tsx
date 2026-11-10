@@ -1,11 +1,13 @@
 import { useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
-import { Plus } from 'lucide-react';
+import { CalendarDays, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { pad, todayISO } from '@/lib/dates';
-import { money, monthLabel } from '@/lib/format';
-import { CATEGORIES, type Derived, type Month } from '@/lib/model';
+import { NumberInput } from '@/components/NumberInput';
+import { addDaysISO, pad, todayISO } from '@/lib/dates';
+import { money, monthLabel, shortDay } from '@/lib/format';
+import { CATEGORIES, type CatKey, type Derived, type LogEntry, type Month } from '@/lib/model';
+import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -14,7 +16,10 @@ export type EntryMode = 'spend' | 'income';
 /* A spend picks a plan line; this marks the free-text fallback. */
 const NEW = '__new';
 
-const chip = 'inline-flex min-h-9 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors';
+/* The last category used, so a run of similar spends needs one tap less. */
+let lastCat: CatKey = CATEGORIES[0].key;
+
+const chip = 'inline-flex min-h-10 items-center gap-2 rounded-full border px-3.5 text-sm transition-colors';
 const chipOn = 'border-(--tint) bg-[color-mix(in_srgb,var(--tint)_14%,transparent)] text-foreground';
 const chipOff = 'border-input text-muted-foreground hover:text-foreground';
 
@@ -36,7 +41,7 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
             aria-selected={mode === k}
             onClick={() => onMode(k)}
             className={cn(
-              'min-h-9 rounded-lg text-sm font-medium transition-colors',
+              'min-h-10 rounded-lg text-sm font-medium transition-colors',
               mode === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             )}
           >
@@ -47,9 +52,7 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
       {mode === 'spend' ? (
         <SpendForm m={m} d={d} onDone={onDone} />
       ) : m.locked ? (
-        <p className="rounded-2xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-          প্ল্যান লক করা আছে। আয় যোগ করতে আগে প্ল্যান থেকে আনলক করো।
-        </p>
+        <LockedIncome m={m} />
       ) : (
         <IncomeForm d={d} onDone={onDone} />
       )}
@@ -66,33 +69,86 @@ function useDateRange(d: Derived) {
 }
 
 function AmountInput({ value, onChange, inputRef, label }: {
-  value: string;
-  onChange: (v: string) => void;
+  value: number | null;
+  onChange: (v: number | null) => void;
   inputRef: RefObject<HTMLInputElement | null>;
   label: string;
 }) {
   return (
-    <Input
+    <NumberInput
       ref={inputRef}
-      type="number"
-      inputMode="numeric"
-      placeholder="৳ ০"
+      nullable
+      data-amount
+      placeholder="0"
       aria-label={label}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-14 rounded-2xl text-center font-fig text-3xl font-semibold md:text-3xl"
+      onValue={onChange}
+      className="h-16 rounded-2xl text-center font-fig text-4xl font-semibold md:text-4xl"
     />
   );
 }
 
-function SpendForm({ m, d, onDone }: { m: Month; d: Derived; onDone?: () => void }) {
+/* Today and yesterday as one tap each; any other day through the picker. */
+function DatePick({ value, onChange, start, end }: { value: string; onChange: (v: string) => void; start: string; end: string }) {
+  const today = todayISO();
+  const yesterday = addDaysISO(today, -1);
+  const quick = [
+    { date: today, label: 'আজ' },
+    { date: yesterday, label: 'গতকাল' }
+  ].filter((q) => q.date >= start && q.date <= end);
+  const other = !quick.some((q) => q.date === value);
+  return (
+    <div className="flex flex-wrap gap-2" style={{ '--tint': 'var(--primary)' } as CSSProperties}>
+      {quick.map((q) => (
+        <button
+          key={q.date}
+          type="button"
+          aria-pressed={value === q.date}
+          onClick={() => onChange(q.date)}
+          className={cn(chip, value === q.date ? chipOn : chipOff)}
+        >
+          {q.label}
+        </button>
+      ))}
+      <label className={cn(chip, 'relative cursor-pointer', other ? chipOn : chipOff)}>
+        <CalendarDays className="size-4" />
+        {other ? shortDay(value) : 'অন্য দিন'}
+        <input
+          type="date"
+          aria-label="তারিখ"
+          value={value}
+          min={start}
+          max={end}
+          onChange={(e) => e.target.value && onChange(e.target.value)}
+          onClick={(e) => {
+            try {
+              e.currentTarget.showPicker();
+            } catch {
+              /* older browsers open the picker on their own */
+            }
+          }}
+          className="absolute inset-0 cursor-pointer opacity-0"
+        />
+      </label>
+    </div>
+  );
+}
+
+export function SpendForm({ m, d, onDone, entry, onDelete }: {
+  m: Month;
+  d: Derived;
+  onDone?: () => void;
+  /* Set when editing an entry that is already written. */
+  entry?: LogEntry;
+  onDelete?: () => void;
+}) {
   const { state, dispatch } = useStore();
   const range = useDateRange(d);
-  const [amount, setAmount] = useState('');
-  const [cat, setCat] = useState<string>(CATEGORIES[0].key);
-  const [pick, setPick] = useState('');
-  const [name, setName] = useState('');
-  const [date, setDate] = useState(range.initial);
+  const [amount, setAmount] = useState<number | null>(entry ? entry.amount : null);
+  const [cat, setCat] = useState<string>(entry ? entry.cat : lastCat);
+  const [pick, setPick] = useState(entry ? (entry.lineId ?? (entry.name ? NEW : '')) : '');
+  const [name, setName] = useState(entry && !entry.lineId ? entry.name : '');
+  const [date, setDate] = useState(entry ? entry.date : range.initial);
   const amountRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -100,25 +156,38 @@ function SpendForm({ m, d, onDone }: { m: Month; d: Derived; onDone?: () => void
   const pickValue = lines.some((l) => l.id === pick) || pick === NEW ? pick : (lines[0]?.id ?? NEW);
   const showName = pickValue === NEW;
   const tint = CATEGORIES.find((c) => c.key === cat)!.tint;
-  const left = d.perCategory[cat].planned - d.perCategory[cat].actual;
+  const own = entry && entry.cat === cat ? entry.amount : 0;
+  const left = d.perCategory[cat].planned - d.perCategory[cat].actual + own;
+  const amt = amount ?? 0;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const amt = Number(amount) || 0;
     if (amt <= 0) {
+      toast.error('কত টাকা খরচ হলো লেখো।');
       amountRef.current?.focus();
       return;
     }
     const when = date || todayISO();
-    if (!state.months[when.slice(0, 7)]) {
-      toast.error(monthLabel(when.slice(0, 7)) + ' এখনো খোলা হয়নি।');
+    const key = when.slice(0, 7);
+    const target = state.months[key];
+    if (!target) {
+      toast.error(monthLabel(key) + ' এখনো খোলা হয়নি।');
       return;
     }
-    dispatch({ type: 'addSpend', date: when, cat, amount: amt, pick: showName ? '' : pickValue, name: showName ? name : '' });
-    toast.success(money(amt) + ' খরচ লেখা হয়েছে।');
-    setAmount('');
-    setPick('');
-    setName('');
+    const pickId = showName ? '' : pickValue;
+    const label = showName ? name : '';
+    if (entry) {
+      dispatch({ type: 'updateLog', id: entry.id, date: when, cat, amount: amt, pick: pickId, name: label });
+      toast.success('খরচ বদলানো হয়েছে।');
+    } else {
+      const before = { log: target.log, loggedDays: target.loggedDays };
+      dispatch({ type: 'addSpend', date: when, cat, amount: amt, pick: pickId, name: label });
+      lastCat = cat as CatKey;
+      undoToast(money(amt) + ' খরচ লেখা হয়েছে।', () => dispatch({ type: 'restoreLogList', month: key, ...before }));
+      setAmount(null);
+      setPick('');
+      setName('');
+    }
     if (onDone) onDone();
     else amountRef.current?.focus();
   }
@@ -127,14 +196,14 @@ function SpendForm({ m, d, onDone }: { m: Month; d: Derived; onDone?: () => void
     <form onSubmit={submit} className="grid gap-4">
       <div>
         <AmountInput value={amount} onChange={setAmount} inputRef={amountRef} label="কত টাকা" />
-        {d.perCategory[cat].planned > 0 && (
-          <p className="mt-1.5 text-center text-xs text-muted-foreground">
-            এই খাতে বাকি {money(left - (Number(amount) || 0))}
-          </p>
-        )}
+        <p className={cn('mt-1.5 min-h-4 text-center text-xs', left - amt < 0 ? 'text-danger' : 'text-muted-foreground')}>
+          {d.perCategory[cat].planned > 0
+            ? left - amt < 0 ? 'এই খাতে ' + money(amt - left) + ' বেশি হয়ে যাবে' : 'এই খাতে বাকি থাকবে ' + money(left - amt)
+            : 'এই খাতে প্ল্যান নেই'}
+        </p>
       </div>
 
-      <fieldset className="grid gap-2">
+      <fieldset>
         <legend className="mb-2 text-sm text-muted-foreground">খাত</legend>
         <div className="grid grid-cols-2 gap-2">
           {CATEGORIES.map((c) => (
@@ -184,7 +253,7 @@ function SpendForm({ m, d, onDone }: { m: Month; d: Derived; onDone?: () => void
             className={cn(chip, 'border-dashed', showName ? chipOn : chipOff)}
           >
             <Plus className="size-3.5" />
-            নতুন নাম
+            {lines.length ? 'অন্য কিছু' : 'নাম লেখো'}
           </button>
         </div>
         {showName && (
@@ -199,40 +268,79 @@ function SpendForm({ m, d, onDone }: { m: Month; d: Derived; onDone?: () => void
         )}
       </fieldset>
 
+      <fieldset>
+        <legend className="mb-2 text-sm text-muted-foreground">কবে</legend>
+        <DatePick value={date} onChange={setDate} start={range.start} end={range.end} />
+      </fieldset>
+
       <div className="flex gap-2">
-        <Input
-          type="date"
-          aria-label="তারিখ"
-          value={date}
-          min={range.start}
-          max={range.end}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-12 w-auto rounded-xl"
-        />
+        {onDelete && (
+          <Button type="button" variant="outline" className="h-12 rounded-xl text-danger hover:text-danger" onClick={onDelete}>
+            <Trash2 />
+            মুছে ফেলো
+          </Button>
+        )}
         <Button type="submit" className="h-12 flex-1 rounded-xl font-fig text-base font-semibold">
-          খরচ লেখো
+          {entry ? 'বদলাও' : amt > 0 ? money(amt) + ' খরচ লেখো' : 'খরচ লেখো'}
         </Button>
       </div>
     </form>
   );
 }
 
+/* A locked plan takes no new income, but money it already expects can still arrive. */
+function LockedIncome({ m }: { m: Month }) {
+  const { state, dispatch } = useStore();
+  const waiting = m.incomes.filter((x) => x.date == null);
+  const today = todayISO();
+  const when = today.slice(0, 7) === state.activeMonth ? today : state.activeMonth + '-01';
+  return (
+    <div className="grid gap-3">
+      {waiting.length > 0 && (
+        <div className="grid gap-2">
+          <p className="text-sm text-muted-foreground">যে আয় আসার কথা, এলে চাপো:</p>
+          {waiting.map((x) => (
+            <div key={x.id} className="flex items-center gap-3 rounded-xl border px-4 py-2">
+              <span className="min-w-0 flex-1 truncate">{x.name || 'আয়'}</span>
+              <span className="font-fig">{money(x.amount)}</span>
+              <Button
+                size="sm"
+                className="rounded-lg"
+                onClick={() => {
+                  dispatch({ type: 'receiveIncome', id: x.id, date: when });
+                  undoToast(money(x.amount) + ' এসেছে।', () => dispatch({ type: 'receiveIncome', id: x.id, date: null }));
+                }}
+              >
+                এলো
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="rounded-2xl bg-muted px-4 py-4 text-center text-sm text-muted-foreground">
+        প্ল্যান লক করা, তাই নতুন আয় যোগ করা যাবে না। প্ল্যান পেজ থেকে আনলক করে যোগ করো।
+      </p>
+    </div>
+  );
+}
+
 function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
   const { state, dispatch } = useStore();
   const range = useDateRange(d);
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [date, setDate] = useState(range.initial);
   const [share, setShare] = useState<'none' | 'half' | 'all'>('none');
   const [repeat, setRepeat] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  const amt = Number(amount) || 0;
+  const amt = amount ?? 0;
   const toSavings = share === 'all' ? amt : share === 'half' ? Math.round(amt / 2) : 0;
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (amt <= 0) {
+      toast.error('কত টাকা এলো লেখো।');
       amountRef.current?.focus();
       return;
     }
@@ -243,7 +351,7 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
     }
     dispatch({ type: 'addIncome', name, amount: amt, date: when, repeat, toSavings });
     toast.success(money(amt) + ' আয় যোগ হয়েছে।');
-    setAmount('');
+    setAmount(null);
     setName('');
     setShare('none');
     setRepeat(false);
@@ -288,6 +396,10 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
           </p>
         )}
       </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-sm text-muted-foreground">কবে এলো</legend>
+        <DatePick value={date} onChange={setDate} start={range.start} end={range.end} />
+      </fieldset>
       <label className="flex min-h-11 items-center gap-3 text-sm">
         <input
           type="checkbox"
@@ -297,20 +409,9 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
         />
         প্রতি মাসে আসে (পরের মাসের প্ল্যানে আপনা থেকে থাকবে)
       </label>
-      <div className="flex gap-2">
-        <Input
-          type="date"
-          aria-label="কবে এলো"
-          value={date}
-          min={range.start}
-          max={range.end}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-12 w-auto rounded-xl"
-        />
-        <Button type="submit" className="h-12 flex-1 rounded-xl font-fig text-base font-semibold">
-          আয় যোগ করো
-        </Button>
-      </div>
+      <Button type="submit" className="h-12 rounded-xl font-fig text-base font-semibold">
+        {amt > 0 ? money(amt) + ' আয় যোগ করো' : 'আয় যোগ করো'}
+      </Button>
     </form>
   );
 }

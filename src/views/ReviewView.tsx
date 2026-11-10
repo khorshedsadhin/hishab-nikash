@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DailySpendChart } from '@/components/DailySpendChart';
+import { NumberInput } from '@/components/NumberInput';
 import { Ledger } from '@/components/Ledger';
 import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -71,10 +72,10 @@ export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onClo
         <Panel className="lg:col-span-2">
           <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] md:gap-10">
             <div>
-              <div className="text-sm text-muted-foreground">এই মাসে জমলো</div>
+              <div className="text-sm text-muted-foreground">{m.saved == null ? 'সঞ্চয়ের লক্ষ্য' : 'এই মাসে জমলো'}</div>
               <div className="mt-1 flex flex-wrap items-center gap-3">
-                <span className={cn('font-fig text-4xl font-semibold', m.saved == null ? 'text-muted-foreground' : 'text-success')}>
-                  {m.saved == null ? 'লেখা হয়নি' : money(saved)}
+                <span className={cn('font-fig text-4xl font-semibold', m.saved == null ? 'text-foreground' : 'text-success')}>
+                  {money(m.saved == null ? m.savingsTarget : saved)}
                 </span>
                 {m.saved != null && m.savingsTarget > 0 && (
                   <span className={cn(
@@ -85,19 +86,22 @@ export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onClo
                   </span>
                 )}
               </div>
+              {m.saved == null && (
+                <p className="mt-2 text-sm text-muted-foreground">মাস বন্ধ করার সময় আসলে কত জমলো সেটা লেখা হবে।</p>
+              )}
               <p className="mt-3 text-sm text-muted-foreground">সব মাস মিলিয়ে জমেছে {money(savedTotal(state))}</p>
             </div>
             <div>
               <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-track">
                 <div className="bg-success" style={{ width: pct(savedPlan) + '%' }} />
-                <div className="bg-(--cat-needs)" style={{ width: pct(d.actual) + '%' }} />
-                <div className="bg-warning" style={{ width: pct(left) + '%' }} />
+                <div className="bg-muted-foreground/60" style={{ width: pct(d.actual) + '%' }} />
+                <div className="bg-[color-mix(in_srgb,var(--primary)_35%,transparent)]" style={{ width: pct(left) + '%' }} />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Figure label="আয়" value={money(d.income)} />
                 <Figure label="সঞ্চয়" value={money(savedPlan)} dot="var(--success)" />
-                <Figure label="খরচ" value={money(d.actual)} dot="var(--cat-needs)" />
-                <Figure label={d.isCurrent ? 'বাকি' : 'থাকল'} value={money(left)} dot="var(--warning)" bad={left < 0} />
+                <Figure label="খরচ" value={money(d.actual)} dot="color-mix(in srgb, var(--muted-foreground) 60%, transparent)" />
+                <Figure label={d.isCurrent ? 'বাকি' : 'থাকল'} value={money(left)} dot="color-mix(in srgb, var(--primary) 35%, transparent)" bad={left < 0} />
               </div>
               {d.carry !== 0 && (
                 <p className="mt-3 text-xs text-muted-foreground">আগের মাস থেকে {money(d.carry)} ধরে</p>
@@ -193,19 +197,19 @@ function Figure({ label, value, dot, bad }: { label: string; value: string; dot?
 /* Mid-month check: does the cash in hand match the ledger? */
 function Reconcile({ m }: { m: Month }) {
   const { state, dispatch } = useStore();
-  const [checkAmount, setCheckAmount] = useState('');
+  const [checkAmount, setCheckAmount] = useState<number | null>(null);
   const [checkDate, setCheckDate] = useState(todayISO());
   const amountRef = useRef<HTMLInputElement>(null);
   const rows = reconRows(m);
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (checkAmount === '') {
+    if (checkAmount == null) {
       amountRef.current?.focus();
       return;
     }
-    dispatch({ type: 'addCheck', date: checkDate || todayISO(), amount: Number(checkAmount) || 0 });
-    setCheckAmount('');
+    dispatch({ type: 'addCheck', date: checkDate || todayISO(), amount: checkAmount });
+    setCheckAmount(null);
     setCheckDate(todayISO());
   }
 
@@ -222,14 +226,13 @@ function Reconcile({ m }: { m: Month }) {
       <PanelTitle>পকেট মিলাও</PanelTitle>
       <p className="-mt-1 mb-4 text-sm text-muted-foreground">হাতের টাকা আর খাতার হিসাব মিলছে কি না দেখো। যেটুকু ফাঁক, সেটুকু খরচ লেখা হয়নি।</p>
       <form onSubmit={submit} className="flex flex-wrap gap-2">
-        <Input
+        <NumberInput
           ref={amountRef}
-          type="number"
-          inputMode="numeric"
+          nullable
           placeholder="এখন হাতে কত"
           aria-label="এখন হাতে কত"
           value={checkAmount}
-          onChange={(e) => setCheckAmount(e.target.value)}
+          onValue={setCheckAmount}
           className="h-11 min-w-32 flex-1 rounded-xl font-fig"
         />
         <Input
@@ -268,7 +271,7 @@ function Reconcile({ m }: { m: Month }) {
               </span>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 className="text-muted-foreground hover:text-danger"
                 aria-label="মুছে ফেলো"
                 onClick={() => removeCheck(check.id)}

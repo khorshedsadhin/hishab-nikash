@@ -9,9 +9,9 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: Reac
     <header className="mb-5 flex flex-wrap items-center gap-3 md:mb-6">
       <div className="min-w-0 flex-1">
         <h1 className="font-fig text-2xl font-semibold md:text-[28px]">{title}</h1>
-        {sub && <div className="text-sm text-muted-foreground">{sub}</div>}
+        {sub && <div className="truncate text-sm text-muted-foreground">{sub}</div>}
       </div>
-      <SyncBadge className="md:hidden" />
+      <SyncBadge className="md:hidden" problemsOnly />
       {children}
     </header>
   );

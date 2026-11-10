@@ -92,13 +92,6 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
               </Panel>
             </>
           )}
-        </div>
-
-        <div className="grid content-start gap-5">
-          <Panel className="hidden lg:block">
-            <PanelTitle>লেখো</PanelTitle>
-            <EntryForm key={state.activeMonth} m={m} d={d} mode={mode} onMode={onMode} />
-          </Panel>
 
           <Panel>
             <PanelTitle
@@ -129,6 +122,14 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
               </Button>
             )}
             <Ledger log={m.log} days={5} />
+          </Panel>
+        </div>
+
+        {/* The form stays in view while the left column scrolls. */}
+        <div className="hidden content-start lg:sticky lg:top-8 lg:grid lg:self-start">
+          <Panel>
+            <PanelTitle>লেখো</PanelTitle>
+            <EntryForm key={state.activeMonth} m={m} d={d} mode={mode} onMode={onMode} />
           </Panel>
         </div>
       </div>

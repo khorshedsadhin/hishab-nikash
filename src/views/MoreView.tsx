@@ -31,7 +31,8 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
   return (
     <>
       <PageHeader title="আরও" />
-      <div className="grid gap-5 lg:grid-cols-2">
+      {/* Columns size to their own content; the month list spans both rows on wide screens. */}
+      <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <Panel>
           <div className="flex items-center gap-4">
             <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary">
@@ -52,7 +53,7 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
           </div>
         </Panel>
 
-        <Panel className="p-0 md:p-0">
+        <Panel className="overflow-hidden p-0 md:p-0 lg:row-span-2">
           <PanelTitle className="mb-0 px-5 pt-5 pb-2">মাস</PanelTitle>
           <div className="divide-y border-t">
             {keys.map((k) => {
@@ -92,6 +93,7 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
               <CalendarPlus className="size-4.5" />
               {monthLabel(nextKey)} খোলো
             </button>
+            <DeleteMonth />
           </div>
         </Panel>
 
@@ -102,8 +104,6 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
             <Backup />
           </div>
         </Panel>
-
-        <DeleteMonth />
       </div>
     </>
   );
@@ -199,10 +199,9 @@ function DeleteMonth() {
   const label = monthLabel(state.activeMonth);
 
   return (
-    <Panel className="border-danger/30 p-0 md:p-0">
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <button type="button" className={cn(row, 'rounded-3xl text-danger')}>
+          <button type="button" className={cn(row, 'text-danger hover:bg-danger/8')}>
             <Trash2 className="size-4.5" />
             {label} মুছে ফেলো
           </button>
@@ -230,6 +229,5 @@ function DeleteMonth() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Panel>
   );
 }

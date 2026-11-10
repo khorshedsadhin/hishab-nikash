@@ -79,7 +79,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
           {STEPS.map((s, i) => (
             <li key={s} aria-current={i === step ? 'step' : undefined} className="grid gap-1.5">
               <span className={cn('h-1 rounded-full', i <= step ? 'bg-primary' : 'bg-track')} />
-              <span className={cn('text-[11px]', i === step ? 'text-foreground' : 'text-muted-foreground')}>{s}</span>
+              <span className={cn('text-xs', i === step ? 'text-foreground' : 'text-muted-foreground')}>{s}</span>
             </li>
           ))}
         </ol>

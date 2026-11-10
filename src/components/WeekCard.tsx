@@ -1,6 +1,6 @@
 import { daysApart, todayISO, weekdayOf } from '@/lib/dates';
 import { BN_WEEKDAYS, BN_WEEKDAYS_LONG, dayLabel, money, toBn } from '@/lib/format';
-import type { Derived, Tone, Week } from '@/lib/model';
+import type { Derived, Week } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { Meter } from './Panel';
 
@@ -15,7 +15,7 @@ export function WeekCard({ d }: { d: Derived & { week: Week } }) {
   const today = todayISO();
   const over = week.left < 0;
   const daysToGo = daysApart(today, week.end) + 1;
-  const amounts = week.days.map((dt) => d.flexByDay[dt] || 0);
+  const amounts = week.days.map((dt) => d.byDay[dt] || 0);
   const scale = Math.max(...amounts, week.perDay * 1.6, 1);
   const lineAt = Math.min(100, (week.perDay / scale) * 100);
 
@@ -72,38 +72,6 @@ export function WeekCard({ d }: { d: Derived & { week: Week } }) {
             {BN_WEEKDAYS[weekdayOf(dt)]}
           </span>
         ))}
-      </div>
-    </div>
-  );
-}
-
-const TONE_LABEL: Record<Tone, string> = { good: 'ঠিক পথে আছো', warn: 'একটু সাবধান', bad: 'বাজেট শেষ' };
-
-/* Pace leaves repeating lines out: paying rent on the 1st is planned, not overspending. */
-export function PaceBar({ d, tone }: { d: Derived; tone: Tone }) {
-  const moneyPct = d.flexBudget > 0 ? Math.min(100, (d.flexSpent / d.flexBudget) * 100) : d.flexSpent > 0 ? 100 : 0;
-  const dayPct = (d.elapsedDays / d.dim) * 100;
-  const fill = tone === 'bad' ? 'bg-danger' : tone === 'warn' ? 'bg-warning' : 'bg-primary';
-  return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">মাসের গতি</span>
-        <span
-          className={cn(
-            'rounded-full px-2.5 py-0.5 text-xs font-medium',
-            tone === 'bad' ? 'bg-danger/12 text-danger' : tone === 'warn' ? 'bg-warning/12 text-warning' : 'bg-success/12 text-success'
-          )}
-        >
-          {TONE_LABEL[tone]}
-        </span>
-      </div>
-      <div className="relative mt-3 h-2.5 rounded-full bg-track">
-        <div className={cn('absolute inset-y-0 left-0 rounded-full', fill)} style={{ width: moneyPct + '%' }} />
-        <div className="absolute -top-1 h-4.5 w-0.5 rounded bg-foreground" style={{ left: 'calc(' + dayPct + '% - 1px)' }} />
-      </div>
-      <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-        <span>দৈনিক খরচ {toBn(Math.round(moneyPct))}%</span>
-        <span>মাস গেছে {toBn(Math.round(dayPct))}%</span>
       </div>
     </div>
   );

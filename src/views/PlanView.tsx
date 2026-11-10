@@ -188,7 +188,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                     </div>
                     <div className="flex items-center gap-3 px-3 pb-1">
                       <Meter className="h-1 flex-1" value={l.amount > 0 ? (spent / l.amount) * 100 : 0} color={spent > l.amount ? 'var(--danger)' : c.tint} />
-                      <span className={cn('min-w-24 text-right text-xs', spent > l.amount ? 'text-danger' : 'text-muted-foreground')}>
+                      <span className={cn('min-w-24 text-right text-sm', spent > l.amount ? 'text-danger' : 'text-muted-foreground')}>
                         {spent > 0 ? money(spent) + ' খরচ' : l.repeat ? 'এখনো দেওয়া হয়নি' : 'খরচ হয়নি'}
                       </span>
                     </div>

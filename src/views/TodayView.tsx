@@ -5,12 +5,12 @@ import { EntryForm, type EntryMode } from '@/components/EntryForm';
 import { Envelopes } from '@/components/Envelopes';
 import { Ledger } from '@/components/Ledger';
 import { Panel, PanelTitle } from '@/components/Panel';
-import { PaceBar, WeekCard } from '@/components/WeekCard';
+import { WeekCard } from '@/components/WeekCard';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import type { View } from '@/components/layout/nav';
 import { prevMonthKey, todayISO, weekdayOf } from '@/lib/dates';
 import { BN_WEEKDAYS_LONG, dayLabel, money, monthLabel, toBn } from '@/lib/format';
-import { canClose, headline, isBlank, streak, tone, type Derived, type Month, type Week } from '@/lib/model';
+import { canClose, headline, isBlank, streak, type Derived, type Month, type Week } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -27,7 +27,8 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
   const today = todayISO();
   const current = today.slice(0, 7);
   const s = streak(state);
-  const t = tone(d);
+  /* Only warnings about money that is actually short; the month's pace is not shown. */
+  const warn = d.isCurrent && (d.remaining <= 0 || d.safeRemaining <= 0 || (d.week != null && d.week.left < 0));
   const blank = isBlank(m);
   const showZeroDay = d.isCurrent && !(m.loggedDays || []).includes(today);
   const closeKey = canClose(state, state.activeMonth)
@@ -62,21 +63,15 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
 
           {!blank && (
             <>
+              <div className="grid gap-3 md:gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
               <Panel>
-                {d.week ? (
-                  <div className="grid gap-6 xl:grid-cols-2 xl:gap-8">
-                    <WeekCard d={d as Derived & { week: Week }} />
-                    <div className="grid content-center gap-4 border-t pt-5 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-8">
-                      <PaceBar d={d} tone={t} />
-                      {t !== 'good' && <p className={cn('text-sm', t === 'bad' ? 'text-danger' : 'text-warning')}>{headline(d)}</p>}
-                    </div>
-                  </div>
-                ) : (
-                  <MonthHero d={d} />
+                {d.week ? <WeekCard d={d as Derived & { week: Week }} /> : <MonthHero d={d} />}
+                {warn && (
+                  <p className={cn('mt-4 border-t pt-4 text-sm', d.remaining <= 0 ? 'text-danger' : 'text-warning')}>{headline(d)}</p>
                 )}
               </Panel>
 
-              {d.isCurrent && <div className="grid grid-cols-2 gap-3 md:gap-5">
+              {d.isCurrent && <div className="grid grid-cols-2 gap-3 md:gap-5 xl:grid-cols-1">
                 <Tile
                   label="মাসে বাকি"
                   value={money(d.remaining)}
@@ -89,6 +84,7 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
                   sub={d.committedLeft > 0 ? 'প্রতি মাসের লাইনে এখনো দেওয়া বাকি' : 'সব বাঁধা খরচ দেওয়া হয়ে গেছে'}
                 />
               </div>}
+              </div>
 
               <Panel>
                 <PanelTitle>খাত</PanelTitle>

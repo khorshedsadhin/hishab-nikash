@@ -448,31 +448,11 @@ describe('streak', () => {
   });
 });
 
-describe('repeating lines', () => {
-  it('keeps a repeating payment out of the week and the pace', () => {
+describe('week', () => {
+  it('counts small spends on a repeating line inside the week', () => {
     const m = september();
-    m.log.push({ id: 'e4', date: '2026-09-13', name: 'line-a', cat: 'needs', amount: 1500, lineId: 'A' });
-    const d = derive(m, '2026-09');
-    expect(d.week!.spent).toBe(500);
-    expect(d.flexSpent).toBe(500);
-    expect(d.fixedByDay['2026-09-13']).toBe(1500);
-    expect(d.flexByDay['2026-09-13']).toBeUndefined();
-    expect(tone(d)).toBe('good');
-  });
-
-  it('counts paying past the line amount as day-to-day spending', () => {
-    const m = september();
-    m.log.push({ id: 'e4', date: '2026-09-13', name: 'line-a', cat: 'needs', amount: 2000, lineId: 'A' });
-    const d = derive(m, '2026-09');
-    expect(d.fixedByDay['2026-09-13']).toBe(1500);
-    expect(d.flexByDay['2026-09-13']).toBe(500);
-    expect(d.week!.spent).toBe(1000);
-  });
-
-  it('warns when day-to-day spending runs ahead of the month', () => {
-    const m = september();
-    m.log.push({ id: 'e4', date: '2026-09-02', name: '', cat: 'wants', amount: 5000, lineId: null });
-    expect(tone(derive(m, '2026-09'))).toBe('warn');
+    m.log.push({ id: 'e4', date: '2026-09-13', name: 'line-a', cat: 'needs', amount: 100, lineId: 'A' });
+    expect(derive(m, '2026-09').week!.spent).toBe(600);
   });
 });
 

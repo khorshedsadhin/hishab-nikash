@@ -5,6 +5,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
+import { LoanList } from '@/components/LoanList';
 import { Panel, PanelTitle } from '@/components/Panel';
 import { AccountButton } from '@/components/layout/AccountButton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -53,7 +54,7 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
           </div>
         </Panel>
 
-        <Panel className="overflow-hidden p-0 md:p-0 lg:row-span-2">
+        <Panel className="overflow-hidden p-0 md:p-0 lg:row-span-3">
           <PanelTitle className="mb-0 px-5 pt-5 pb-2">মাস</PanelTitle>
           <div className="divide-y border-t">
             {keys.map((k) => {
@@ -96,6 +97,8 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
             <DeleteMonth />
           </div>
         </Panel>
+
+        <LoanList />
 
         <Panel className="p-0 md:p-0">
           <PanelTitle className="mb-0 px-5 pt-5 pb-2">সেটিংস</PanelTitle>

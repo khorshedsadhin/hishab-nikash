@@ -27,7 +27,7 @@ export function EntrySheet({ open, onOpenChange, mode, onMode, m, d }: {
       >
         <div>
           <DialogTitle className="font-fig text-xl">লেখো</DialogTitle>
-          <DialogDescription className="sr-only">খরচ বা আয় লিখে রাখো</DialogDescription>
+          <DialogDescription className="sr-only">খরচ, আয় বা ধার লিখে রাখো</DialogDescription>
         </div>
         <EntryForm key={state.activeMonth} m={m} d={d} mode={mode} onMode={onMode} onDone={() => onOpenChange(false)} />
       </DialogContent>

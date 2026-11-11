@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { money } from './format';
 import {
   blankMonth, bookBalance, canClose, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
-  isBlank, migrate, reconRows, streak, tone, type Month, type State
+  isBlank, loanRows, migrate, reconRows, savingsHeld, streak, tone, type Month, type State
 } from './model';
 import { reducer } from '@/state/store';
 
@@ -491,5 +491,137 @@ describe('updateLog', () => {
     const added = reducer(before, { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: 'entry-2' });
     const back = reducer(added, { type: 'restoreLogList', month: '2026-09', log: m.log, loggedDays: m.loggedDays });
     expect(back).toEqual(before);
+  });
+});
+
+describe('loans', () => {
+  const lend = (from: 'spend' | 'savings', amount = 500) => ({
+    id: 'L1', date: '2026-09-10', name: 'person-a', amount, from
+  });
+  const stateWith = (m: Month): State => ({ activeMonth: '2026-09', months: { '2026-09': m } });
+
+  it('takes a spend loan out of the spendable pool only', () => {
+    const base = derive(september(), '2026-09');
+    const state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
+    const m = state.months['2026-09'];
+    const d = derive(m, '2026-09');
+    expect(d.remaining).toBe(base.remaining - 500);
+    expect(d.actual).toBe(base.actual);
+    expect(d.perCategory.needs.actual).toBe(base.perCategory.needs.actual);
+    expect(savingsHeld(m)).toBe(2000);
+  });
+
+  it('takes a savings loan out of savings only', () => {
+    const base = derive(september(), '2026-09');
+    const state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('savings') });
+    const m = state.months['2026-09'];
+    const d = derive(m, '2026-09');
+    expect(d.remaining).toBe(base.remaining);
+    expect(d.spendable).toBe(base.spendable);
+    expect(savingsHeld(m)).toBe(1500);
+  });
+
+  it('counts both kinds as cash that left', () => {
+    const m = september();
+    m.cashStart = 0;
+    const before = expectedAt(m, '2026-09-15')!;
+    const early = expectedAt(m, '2026-09-09');
+    m.loans = [lend('spend', 300), { ...lend('savings', 200), id: 'L2' }];
+    expect(expectedAt(m, '2026-09-15')).toBe(before - 500);
+    expect(expectedAt(m, '2026-09-09')).toBe(early);
+  });
+
+  it('clears a loan when an income is linked to it, and reopens it when that income goes', () => {
+    let state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
+    state = reducer(state, {
+      type: 'addIncome', id: 'R1', name: 'x', amount: 200, date: '2026-09-15', repeat: false, toSavings: 0, loanId: 'L1'
+    });
+    expect(loanRows(state)[0]).toMatchObject({ returned: 200, left: 300 });
+    state = reducer(state, {
+      type: 'addIncome', id: 'R2', name: 'x', amount: 300, date: '2026-09-15', repeat: false, toSavings: 0, loanId: 'L1'
+    });
+    expect(loanRows(state)[0].left).toBe(0);
+    state = reducer(state, { type: 'deleteIncome', id: 'R2' });
+    expect(loanRows(state)[0].left).toBe(300);
+  });
+
+  it('ignores an expected income that has not arrived', () => {
+    const m = september();
+    m.loans = [lend('spend')];
+    m.incomes.push({ id: 'R', name: 'x', amount: 500, date: null, repeat: false, loanId: 'L1' });
+    expect(loanRows(stateWith(m))[0].left).toBe(500);
+  });
+
+  it('lets a later month pay back an earlier loan', () => {
+    const m = september();
+    m.loans = [lend('spend')];
+    const oct = blankMonth();
+    oct.incomes = [{ id: 'R', name: 'x', amount: 500, date: '2026-10-03', repeat: false, loanId: 'L1' }];
+    const rows = loanRows({ activeMonth: '2026-10', months: { '2026-09': m, '2026-10': oct } });
+    expect(rows[0]).toMatchObject({ month: '2026-09', left: 0 });
+  });
+
+  it('adds a payback to spendable, or to savings when asked', () => {
+    const state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('savings') });
+    const base = derive(state.months['2026-09'], '2026-09');
+    const toSpend = reducer(state, {
+      type: 'addIncome', name: 'x', amount: 500, date: '2026-09-15', repeat: false, toSavings: 0, loanId: 'L1'
+    }).months['2026-09'];
+    expect(derive(toSpend, '2026-09').spendable).toBe(base.spendable + 500);
+    expect(toSpend.savingsTarget).toBe(2000);
+    const toSave = reducer(state, {
+      type: 'addIncome', name: 'x', amount: 500, date: '2026-09-15', repeat: false, toSavings: 500, loanId: 'L1'
+    }).months['2026-09'];
+    expect(derive(toSave, '2026-09').spendable).toBe(base.spendable);
+    expect(toSave.savingsTarget).toBe(2500);
+  });
+
+  it('takes a loan while the plan is locked but still refuses income', () => {
+    const m = september();
+    m.locked = true;
+    const state = reducer(stateWith(m), { type: 'addLoan', loan: lend('spend') });
+    expect(state.months['2026-09'].loans).toHaveLength(1);
+    const add = { type: 'addIncome', name: '', amount: 100, date: '2026-09-15', repeat: false, toSavings: 0, loanId: 'L1' } as const;
+    expect(reducer(state, add)).toBe(state);
+  });
+
+  it('undoes an income add, including its share to savings', () => {
+    const state = stateWith(september());
+    const added = reducer(state, {
+      type: 'addIncome', id: 'N1', name: 'x', amount: 500, date: '2026-09-15', repeat: false, toSavings: 300
+    });
+    expect(added.months['2026-09'].savingsTarget).toBe(2300);
+    const undone = reducer(added, { type: 'undoIncome', month: '2026-09', id: 'N1', toSavings: 300 });
+    expect(undone.months['2026-09'].incomes).toHaveLength(1);
+    expect(undone.months['2026-09'].savingsTarget).toBe(2000);
+  });
+
+  it('deletes and restores a loan', () => {
+    let state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
+    state = reducer(state, { type: 'deleteLoan', month: '2026-09', id: 'L1' });
+    expect(state.months['2026-09'].loans).toHaveLength(0);
+    state = reducer(state, { type: 'restoreLoan', month: '2026-09', loan: lend('spend'), index: 0 });
+    expect(state.months['2026-09'].loans).toHaveLength(1);
+  });
+
+  it('refuses an empty loan', () => {
+    const state = stateWith(september());
+    expect(reducer(state, { type: 'addLoan', loan: lend('spend', 0) })).toBe(state);
+  });
+
+  it('adds an empty loan list to old saves and keeps it out of the next month', () => {
+    const old: any = { activeMonth: '2026-09', months: { '2026-09': september() } };
+    delete old.months['2026-09'].loans;
+    expect(migrate(old).months['2026-09'].loans).toEqual([]);
+    const m = september();
+    m.loans = [lend('spend')];
+    expect(makeNewMonth(m).loans).toEqual([]);
+  });
+
+  it('lowers the week budget for a loan lent before the week', () => {
+    const m = september();
+    const base = derive(m, '2026-09').week!.budget;
+    m.loans = [{ ...lend('spend', 1000), date: '2026-09-10' }];
+    expect(derive(m, '2026-09').week!.budget).toBeLessThan(base);
   });
 });

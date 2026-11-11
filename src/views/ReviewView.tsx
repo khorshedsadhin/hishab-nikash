@@ -10,7 +10,7 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money, monthLabel } from '@/lib/format';
-import { CATEGORIES, canClose, reconRows, savedTotal, type Derived, type Month } from '@/lib/model';
+import { CATEGORIES, canClose, lentFrom, reconRows, savedTotal, savingsHeld, type Derived, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -20,8 +20,9 @@ export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onClo
   const keys = Object.keys(state.months).sort();
   const at = keys.indexOf(state.activeMonth);
   const saved = m.saved ?? 0;
-  const savedPlan = m.saved ?? m.savingsTarget;
-  const left = d.income + d.carry - savedPlan - d.actual;
+  const held = savingsHeld(m);
+  const savedPlan = m.saved ?? held;
+  const left = d.income + d.carry - savedPlan - d.actual - d.lent - lentFrom(m, 'savings');
   const total = Math.max(1, savedPlan + d.actual + Math.max(0, left));
   const pct = (n: number) => (Math.max(0, n) / total) * 100;
 
@@ -75,15 +76,18 @@ export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onClo
               <div className="text-sm text-muted-foreground">{m.saved == null ? 'সঞ্চয়ের লক্ষ্য' : 'এই মাসে জমলো'}</div>
               <div className="mt-1 flex flex-wrap items-center gap-3">
                 <span className={cn('font-fig text-4xl font-semibold', m.saved == null ? 'text-foreground' : 'text-success')}>
-                  {money(m.saved == null ? m.savingsTarget : saved)}
+                  {money(m.saved == null ? held : saved)}
                 </span>
                 {m.saved != null && m.savingsTarget > 0 && (
                   <span className={cn(
                     'rounded-full px-2.5 py-0.5 text-xs',
-                    saved >= m.savingsTarget ? 'bg-success/12 text-success' : 'bg-warning/12 text-warning'
+                    saved >= held ? 'bg-success/12 text-success' : 'bg-warning/12 text-warning'
                   )}>
-                    {saved >= m.savingsTarget ? 'লক্ষ্য পূরণ' : 'লক্ষ্য ' + money(m.savingsTarget)}
+                    {saved >= held ? 'লক্ষ্য পূরণ' : 'লক্ষ্য ' + money(m.savingsTarget)}
                   </span>
+                )}
+                {m.saved == null && held !== m.savingsTarget && (
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">লক্ষ্য {money(m.savingsTarget)}</span>
                 )}
               </div>
               {m.saved == null && (

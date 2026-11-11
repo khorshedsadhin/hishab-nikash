@@ -26,6 +26,19 @@ export interface Income {
   amount: number;
   date: string | null;
   repeat: boolean;
+  /* Set when this income is money coming back from a loan. */
+  loanId?: string;
+}
+
+/* Where the lent money came from: the spendable pool or the month's savings. */
+export type LoanSource = 'spend' | 'savings';
+
+export interface Loan {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
+  from: LoanSource;
 }
 
 export interface Check {
@@ -39,6 +52,7 @@ export interface Month {
   savingsTarget: number;
   budget: Record<string, Line[]>;
   log: LogEntry[];
+  loans: Loan[];
   reflection: string;
   saved: number | null;
   cashStart: number | null;
@@ -81,6 +95,7 @@ export function makeNewMonth(fromMonth: Month): Month {
     savingsTarget: fromMonth.savingsTarget,
     budget,
     log: [],
+    loans: [],
     reflection: '',
     saved: null,
     cashStart: null,
@@ -101,6 +116,7 @@ export function blankMonth(): Month {
     savingsTarget: 0,
     budget,
     log: [],
+    loans: [],
     reflection: '',
     saved: null,
     cashStart: null,
@@ -124,6 +140,52 @@ export function receivedUpto(m: Month, date: string): number {
   return (m.incomes || []).reduce((s, x) => s + (x.date != null && x.date <= date ? (x.amount || 0) : 0), 0);
 }
 
+/* --- loans: money lent out, paid back later as income --- */
+
+export function lentFrom(m: Month, from: LoanSource): number {
+  return (m.loans || []).reduce((s, l) => s + (l.from === from ? l.amount : 0), 0);
+}
+
+/* Cash that left through loans by `date`, whichever pool it came from. */
+function loanedUpto(m: Month, date: string): number {
+  return (m.loans || []).reduce((s, l) => s + (l.date <= date ? l.amount : 0), 0);
+}
+
+/* The month's savings after loans taken out of them; never below zero. */
+export function savingsHeld(m: Month): number {
+  return Math.max(0, m.savingsTarget - lentFrom(m, 'savings'));
+}
+
+/* Paid back so far: every arrived income linked to the loan, in any month. */
+export function loanReturned(state: State, loanId: string): number {
+  let total = 0;
+  Object.keys(state.months).forEach((k) => {
+    (state.months[k].incomes || []).forEach((x) => {
+      if (x.loanId === loanId && x.date != null) total += x.amount || 0;
+    });
+  });
+  return total;
+}
+
+export interface LoanRow {
+  loan: Loan;
+  month: string;
+  returned: number;
+  left: number;
+}
+
+/* Every loan across all months, oldest first. */
+export function loanRows(state: State): LoanRow[] {
+  const rows: LoanRow[] = [];
+  Object.keys(state.months).forEach((k) => {
+    (state.months[k].loans || []).forEach((loan) => {
+      const returned = loanReturned(state, loan.id);
+      rows.push({ loan, month: k, returned, left: Math.max(0, loan.amount - returned) });
+    });
+  });
+  return rows.sort((a, b) => (a.loan.date < b.loan.date ? -1 : a.loan.date > b.loan.date ? 1 : 0));
+}
+
 /* Old saves predate the reconcile fields, the per-line spend links and the income list. */
 export function migrate(s: any): State {
   Object.keys(s.months).forEach((k) => {
@@ -138,6 +200,7 @@ export function migrate(s: any): State {
       if (!Array.isArray(m.budget[c.key])) m.budget[c.key] = [];
     });
     if (!Array.isArray(m.log)) m.log = [];
+    if (!Array.isArray(m.loans)) m.loans = [];
     if (typeof m.reflection !== 'string') m.reflection = '';
     if (typeof m.saved !== 'number') m.saved = null;
     if (typeof m.cashStart !== 'number') m.cashStart = null;
@@ -162,8 +225,9 @@ export function migrate(s: any): State {
 
 /* --- reconcile: is the ledger telling the truth? --- */
 
+/* Cash out by `date`: spending plus everything lent. */
 function spentUpto(m: Month, date: string): number {
-  return (m.log || []).reduce((s, e) => s + (e.date <= date ? (e.amount || 0) : 0), 0);
+  return (m.log || []).reduce((s, e) => s + (e.date <= date ? (e.amount || 0) : 0), 0) + loanedUpto(m, date);
 }
 
 /* Counts income from the day it arrived; assumes `saved` has already left. */
@@ -232,6 +296,8 @@ export interface Derived {
   perCategory: Record<string, CategoryTotals>;
   lineActual: Record<string, number>;
   actual: number;
+  /* Lent out of the spendable pool; savings loans are not here. */
+  lent: number;
   remaining: number;
   committedLeft: number;
   safeRemaining: number;
@@ -271,6 +337,11 @@ function weekOf(m: Month, monthKey: string, spendable: number, todayStr: string)
   const before: Record<string, number> = {};
   let spentBefore = 0;
   let spent = 0;
+  (m.loans || []).forEach((l) => {
+    if (l.from !== 'spend') return;
+    if (l.date < start) spentBefore += l.amount;
+    else if (l.date <= end) spent += l.amount;
+  });
   (m.log || []).forEach((e) => {
     if (e.date < start) {
       spentBefore += e.amount || 0;
@@ -332,7 +403,8 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
   const committedLeft = committedFrom(m, lineActual);
   const buffer = spendable - planned;
   const actual = log.reduce((s, e) => s + (e.amount || 0), 0);
-  const remaining = spendable - actual;
+  const lent = lentFrom(m, 'spend');
+  const remaining = spendable - actual - lent;
   const safeRemaining = remaining - committedLeft;
 
   const todayStr = todayISO();
@@ -369,6 +441,7 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     perCategory,
     lineActual,
     actual,
+    lent,
     remaining,
     committedLeft,
     safeRemaining,
@@ -436,7 +509,7 @@ export type Tone = 'good' | 'warn' | 'bad';
 
 /* Nothing planned and nothing written: the month still needs setting up. */
 export function isBlank(m: Month): boolean {
-  return incomeTotal(m) === 0 && (m.log || []).length === 0 &&
+  return incomeTotal(m) === 0 && (m.log || []).length === 0 && (m.loans || []).length === 0 &&
     CATEGORIES.every((c) => (m.budget[c.key] || []).every((l) => !l.amount));
 }
 

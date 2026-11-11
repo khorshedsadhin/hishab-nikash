@@ -11,7 +11,7 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { prevMonthKey, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
-import { CATEGORIES, carryInto, type Derived, type Income, type Month } from '@/lib/model';
+import { CATEGORIES, carryInto, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -66,6 +66,11 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                 onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })}
                 className="h-10 rounded-xl font-fig text-lg"
               />
+              {savingsHeld(m) !== m.savingsTarget && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  সঞ্চয় {money(savingsHeld(m))} / লক্ষ্য {money(m.savingsTarget)}
+                </p>
+              )}
             </Term>
             <Op>+</Op>
             <Term label={monthLabel(prevMonthKey(state.activeMonth)) + ' থেকে হাতে'} htmlFor="plan-carry">

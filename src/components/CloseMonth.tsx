@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { nextMonthKey } from '@/lib/dates';
 import { dayLabel, money, monthLabel, toBn } from '@/lib/format';
 import {
-  bookBalance, CATEGORIES, catLabel, closeDate, deriveMonth, incomeTotal, type Month
+  bookBalance, CATEGORIES, catLabel, closeDate, deriveMonth, incomeTotal, savingsHeld, type Month
 } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -34,7 +34,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
   const next: Month | undefined = state.months[nextKey];
 
   const [step, setStep] = useState(0);
-  const [saved, setSaved] = useState<number>(m.saved ?? m.savingsTarget);
+  const [saved, setSaved] = useState<number>(m.saved ?? savingsHeld(m));
   const [cash, setCash] = useState<number | null>(null);
   const [fill, setFill] = useState(true);
   const [extra, setExtra] = useState(0);
@@ -94,7 +94,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
             onValue={(v) => setSaved(v ?? 0)}
             className="h-12 rounded-xl font-fig text-xl"
           />
-          <p className="text-sm text-muted-foreground">লক্ষ্য ছিল {money(m.savingsTarget)}। যা সত্যি আলাদা করেছ সেটাই লেখো।</p>
+          <p className="text-sm text-muted-foreground">লক্ষ্য ছিল {money(m.savingsTarget)}{savingsHeld(m) !== m.savingsTarget ? ', ধার দেওয়ার পর ' + money(savingsHeld(m)) : ''}। যা সত্যি আলাদা করেছ সেটাই লেখো।</p>
         </div>
       )}
 
@@ -164,7 +164,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-2">
             <Stat label="আয়" value={money(d.received)} />
-            <Stat label="সঞ্চয়" value={money(saved + extraSafe)} tone={saved + extraSafe >= m.savingsTarget ? 'good' : 'warn'} />
+            <Stat label="সঞ্চয়" value={money(saved + extraSafe)} tone={saved + extraSafe >= savingsHeld(m) ? 'good' : 'warn'} />
             <Stat label="খরচ" value={money(d.actual + fillGap)} />
             <Stat label="পরের মাসে যাবে" value={money(forward)} />
           </div>

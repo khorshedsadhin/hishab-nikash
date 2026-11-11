@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
   blankMonth, closeDate, expectedAt, makeNewMonth, migrate,
-  type Check, type Income, type Line, type LogEntry, type Month, type State
+  type Check, type Income, type Line, type Loan, type LogEntry, type Month, type State
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
@@ -15,7 +15,11 @@ export type Action =
   | { type: 'deleteCheck'; id: string }
   | { type: 'markZeroDay' }
   | { type: 'fillGap'; checkId: string }
-  | { type: 'addIncome'; id?: string; name: string; amount: number; date: string | null; repeat: boolean; toSavings: number }
+  | { type: 'addIncome'; id?: string; name: string; amount: number; date: string | null; repeat: boolean; toSavings: number; loanId?: string }
+  | { type: 'undoIncome'; month: string; id: string; toSavings: number }
+  | { type: 'addLoan'; loan: Loan }
+  | { type: 'deleteLoan'; month: string; id: string }
+  | { type: 'restoreLoan'; month: string; loan: Loan; index: number }
   | { type: 'updateIncome'; id: string; name?: string; amount?: number }
   | { type: 'receiveIncome'; id: string; date: string | null }
   | { type: 'toggleIncomeRepeat'; id: string }
@@ -159,6 +163,25 @@ export function reducer(prev: State, action: Action): State {
       markLogged(m, check.date);
       break;
     }
+    /* A loan is cash moving out, not a plan edit, so a locked month still takes it. */
+    case 'addLoan': {
+      const target = state.months[action.loan.date.slice(0, 7)];
+      if (!target || action.loan.amount <= 0) return prev;
+      target.loans.push({ ...action.loan, name: action.loan.name.trim() });
+      break;
+    }
+    case 'deleteLoan': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.loans = target.loans.filter((l) => l.id !== action.id);
+      break;
+    }
+    case 'restoreLoan': {
+      const target = state.months[action.month];
+      if (!target) return prev;
+      target.loans.splice(action.index, 0, action.loan);
+      break;
+    }
     /* The lock holds income too; checked on the month the income lands in. */
     case 'addIncome': {
       const target = action.date ? state.months[action.date.slice(0, 7)] : m;
@@ -168,9 +191,19 @@ export function reducer(prev: State, action: Action): State {
         name: action.name.trim(),
         amount: action.amount,
         date: action.date,
-        repeat: action.repeat
+        repeat: action.repeat,
+        ...(action.loanId ? { loanId: action.loanId } : {})
       });
       if (action.toSavings > 0) target.savingsTarget += Math.min(action.toSavings, action.amount);
+      break;
+    }
+    /* Undo of an add: takes the income out again and gives back the share that went to savings. */
+    case 'undoIncome': {
+      const target = state.months[action.month];
+      const income = target?.incomes.find((x) => x.id === action.id);
+      if (!target || !income) return prev;
+      target.incomes = target.incomes.filter((x) => x.id !== action.id);
+      target.savingsTarget = Math.max(0, target.savingsTarget - Math.min(action.toSavings, income.amount));
       break;
     }
     case 'updateIncome': {

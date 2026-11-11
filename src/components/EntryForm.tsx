@@ -4,14 +4,14 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/NumberInput';
-import { addDaysISO, pad, todayISO } from '@/lib/dates';
+import { addDaysISO, pad, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay } from '@/lib/format';
-import { CATEGORIES, type CatKey, type Derived, type LogEntry, type Month } from '@/lib/model';
+import { CATEGORIES, loanRows, savingsHeld, type CatKey, type Derived, type LoanSource, type LogEntry, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
-export type EntryMode = 'spend' | 'income';
+export type EntryMode = 'spend' | 'income' | 'loan';
 
 /* A spend picks a plan line; this marks the free-text fallback. */
 const NEW = '__new';
@@ -32,8 +32,8 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
 }) {
   return (
     <div className="grid gap-4">
-      <div role="tablist" aria-label="কী লিখবে" className="grid grid-cols-2 rounded-xl bg-muted p-1">
-        {(['spend', 'income'] as const).map((k) => (
+      <div role="tablist" aria-label="কী লিখবে" className="grid grid-cols-3 rounded-xl bg-muted p-1">
+        {(['spend', 'income', 'loan'] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -45,12 +45,14 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
               mode === k ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'
             )}
           >
-            {k === 'spend' ? 'খরচ' : 'আয়'}
+            {k === 'spend' ? 'খরচ' : k === 'income' ? 'আয়' : 'ধার'}
           </button>
         ))}
       </div>
       {mode === 'spend' ? (
         <SpendForm m={m} d={d} onDone={onDone} />
+      ) : mode === 'loan' ? (
+        <LoanForm d={d} onDone={onDone} />
       ) : m.locked ? (
         <LockedIncome m={m} />
       ) : (
@@ -288,6 +290,96 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
   );
 }
 
+/* Lending out: the money leaves either the spendable pool or the savings, never both. */
+function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
+  const { state, dispatch } = useStore();
+  const range = useDateRange(d);
+  const m = state.months[state.activeMonth];
+  const [amount, setAmount] = useState<number | null>(null);
+  const [name, setName] = useState('');
+  const [from, setFrom] = useState<LoanSource>('spend');
+  const [date, setDate] = useState(range.initial);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const amt = amount ?? 0;
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (amt <= 0) {
+      toast.error('কত টাকা ধার দিলে লেখো।');
+      amountRef.current?.focus();
+      return;
+    }
+    if (!name.trim()) {
+      toast.error('কাকে ধার দিলে লেখো।');
+      nameRef.current?.focus();
+      return;
+    }
+    const when = date || todayISO();
+    const key = when.slice(0, 7);
+    if (!state.months[key]) {
+      toast.error(monthLabel(key) + ' এখনো খোলা হয়নি।');
+      return;
+    }
+    const loan = { id: uid(), date: when, name, amount: amt, from };
+    dispatch({ type: 'addLoan', loan });
+    undoToast(money(amt) + ' ধার লেখা হয়েছে।', () => dispatch({ type: 'deleteLoan', month: key, id: loan.id }));
+    setAmount(null);
+    setName('');
+    if (onDone) onDone();
+    else amountRef.current?.focus();
+  }
+
+  const sources = [
+    { key: 'spend', label: 'খরচের টাকা থেকে' },
+    { key: 'savings', label: 'সঞ্চয় থেকে' }
+  ] as const;
+
+  return (
+    <form onSubmit={submit} className="grid gap-4" style={{ '--tint': 'var(--primary)' } as CSSProperties}>
+      <AmountInput value={amount} onChange={setAmount} inputRef={amountRef} label="কত টাকা ধার দিলে" />
+      <Input
+        ref={nameRef}
+        placeholder="কাকে দিলে"
+        aria-label="কাকে দিলে"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="h-11 rounded-xl"
+      />
+      <fieldset>
+        <legend className="mb-2 text-sm text-muted-foreground">কোন টাকা থেকে দিলে?</legend>
+        <div className="flex flex-wrap gap-2">
+          {sources.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              aria-pressed={from === o.key}
+              onClick={() => setFrom(o.key)}
+              className={cn(chip, from === o.key ? chipOn : chipOff)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {amt > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {from === 'spend'
+              ? 'খরচের টাকা বাকি থাকবে ' + money(d.remaining - amt) + '। সঞ্চয় একই থাকবে।'
+              : 'সঞ্চয় হবে ' + money(Math.max(0, savingsHeld(m) - amt)) + '। খরচের টাকা একই থাকবে।'}
+          </p>
+        )}
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-sm text-muted-foreground">কবে দিলে</legend>
+        <DatePick value={date} onChange={setDate} start={range.start} end={range.end} />
+      </fieldset>
+      <Button type="submit" className="h-12 rounded-xl font-fig text-base font-semibold">
+        {amt > 0 ? money(amt) + ' ধার লেখো' : 'ধার লেখো'}
+      </Button>
+    </form>
+  );
+}
+
 /* A locked plan takes no new income, but money it already expects can still arrive. */
 function LockedIncome({ m }: { m: Month }) {
   const { state, dispatch } = useStore();
@@ -327,6 +419,8 @@ function LockedIncome({ m }: { m: Month }) {
 function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
   const { state, dispatch } = useStore();
   const range = useDateRange(d);
+  const open = loanRows(state).filter((r) => r.left > 0);
+  const [loanId, setLoanId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [date, setDate] = useState(range.initial);
@@ -349,14 +443,23 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
       toast.error(monthLabel(when.slice(0, 7)) + ' এখনো খোলা হয়নি।');
       return;
     }
-    dispatch({ type: 'addIncome', name, amount: amt, date: when, repeat, toSavings });
-    toast.success(money(amt) + ' আয় যোগ হয়েছে।');
+    const id = uid();
+    dispatch({ type: 'addIncome', id, name, amount: amt, date: when, repeat: loanId ? false : repeat, toSavings, ...(loanId ? { loanId } : {}) });
+    undoToast(money(amt) + ' আয় যোগ হয়েছে।', () => dispatch({ type: 'undoIncome', month: when.slice(0, 7), id, toSavings }));
     setAmount(null);
     setName('');
     setShare('none');
     setRepeat(false);
+    setLoanId(null);
     if (onDone) onDone();
     else amountRef.current?.focus();
+  }
+
+  /* Choosing a loan fills in the name and the amount still owed. */
+  function pickLoan(r: (typeof open)[number] | null) {
+    setLoanId(r ? r.loan.id : null);
+    setName(r ? 'ধার ফেরত, ' + r.loan.name : '');
+    if (r && !amount) setAmount(r.left);
   }
 
   const shares = [
@@ -368,13 +471,33 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
   return (
     <form onSubmit={submit} className="grid gap-4" style={{ '--tint': 'var(--primary)' } as CSSProperties}>
       <AmountInput value={amount} onChange={setAmount} inputRef={amountRef} label="কত টাকা এলো" />
-      <Input
-        placeholder="কোথা থেকে, যেমন বেতন বা প্রজেক্ট"
-        aria-label="আয়ের নাম"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="h-11 rounded-xl"
-      />
+      {open.length > 0 && (
+        <fieldset>
+          <legend className="mb-2 text-sm text-muted-foreground">এটা কি ধার ফেরত?</legend>
+          <div className="flex flex-wrap gap-2">
+            {open.map((r) => (
+              <button
+                key={r.loan.id}
+                type="button"
+                aria-pressed={loanId === r.loan.id}
+                onClick={() => pickLoan(loanId === r.loan.id ? null : r)}
+                className={cn(chip, loanId === r.loan.id ? chipOn : chipOff)}
+              >
+                {r.loan.name || 'ধার'} · {money(r.left)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {!loanId && (
+        <Input
+          placeholder="কোথা থেকে, যেমন বেতন বা প্রজেক্ট"
+          aria-label="আয়ের নাম"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-11 rounded-xl"
+        />
+      )}
       <fieldset>
         <legend className="mb-2 text-sm text-muted-foreground">এই টাকা দিয়ে কী করবে?</legend>
         <div className="flex flex-wrap gap-2">
@@ -400,7 +523,7 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
         <legend className="mb-2 text-sm text-muted-foreground">কবে এলো</legend>
         <DatePick value={date} onChange={setDate} start={range.start} end={range.end} />
       </fieldset>
-      <label className="flex min-h-11 items-center gap-3 text-sm">
+      {!loanId && <label className="flex min-h-11 items-center gap-3 text-sm">
         <input
           type="checkbox"
           checked={repeat}
@@ -408,7 +531,7 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
           className="size-4.5 accent-primary"
         />
         প্রতি মাসে আসে (পরের মাসের প্ল্যানে আপনা থেকে থাকবে)
-      </label>
+      </label>}
       <Button type="submit" className="h-12 rounded-xl font-fig text-base font-semibold">
         {amt > 0 ? money(amt) + ' আয় যোগ করো' : 'আয় যোগ করো'}
       </Button>

@@ -9,7 +9,7 @@ import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import type { View } from '@/components/layout/nav';
 import { prevMonthKey, todayISO, weekdayOf } from '@/lib/dates';
 import { BN_WEEKDAYS_LONG, dayLabel, money, monthLabel, toBn } from '@/lib/format';
-import { canClose, headline, isBlank, streak, type Derived, type Month } from '@/lib/model';
+import { canClose, isBlank, streak, type Derived, type Month } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -26,8 +26,6 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
   const today = todayISO();
   const current = today.slice(0, 7);
   const s = streak(state);
-  /* Only warnings about money that is actually short; the month's pace is not shown. */
-  const warn = d.isCurrent && (d.remaining <= 0 || d.safeRemaining <= 0 || (d.week != null && d.week.left < 0));
   const blank = isBlank(m);
   const showZeroDay = d.isCurrent && !(m.loggedDays || []).includes(today);
   const closeKey = canClose(state, state.activeMonth)
@@ -80,10 +78,6 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
                 <Panel>
                   <MonthHero d={d} />
                 </Panel>
-              )}
-
-              {warn && (
-                <p className={cn('text-sm', d.remaining <= 0 ? 'text-danger' : 'text-warning')}>{headline(d)}</p>
               )}
 
               <Panel>

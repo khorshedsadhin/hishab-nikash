@@ -82,14 +82,14 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
 
               <Panel>
                 <PanelTitle>খাত</PanelTitle>
-                <Envelopes d={d} />
+                <Envelopes d={d} loans={m.loans} onLoans={() => onView('more')} />
               </Panel>
             </>
           )}
 
           <Panel>
             <PanelTitle
-              action={m.log.length > 0 && (
+              action={(m.log.length > 0 || m.loans.length > 0) && (
                 <button
                   type="button"
                   onClick={() => onView('review')}
@@ -115,7 +115,7 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
                 আজ কিছু খরচ হয়নি
               </Button>
             )}
-            <Ledger log={m.log} days={5} />
+            <Ledger log={m.log} loans={m.loans} days={5} onLoans={() => onView('more')} />
           </Panel>
         </div>
 

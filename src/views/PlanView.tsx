@@ -11,14 +11,14 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { prevMonthKey, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
-import { CATEGORIES, carryInto, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
+import { CATEGORIES, carryInto, lentFrom, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
 const ghostInput = 'h-9 border-transparent bg-transparent shadow-none hover:border-input focus-visible:border-input dark:bg-transparent disabled:cursor-default disabled:opacity-100';
 
-export function PlanView({ m, d }: { m: Month; d: Derived }) {
+export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () => void }) {
   const { state, dispatch } = useStore();
   const [newLineId, setNewLineId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -67,7 +67,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
                 className="h-10 rounded-xl font-fig text-lg"
               />
               {savingsHeld(m) !== m.savingsTarget && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground lg:absolute lg:top-full lg:left-0 lg:mt-0 lg:whitespace-nowrap">
                   সঞ্চয় {money(savingsHeld(m))} / লক্ষ্য {money(m.savingsTarget)}
                 </p>
               )}
@@ -93,7 +93,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-2">
+          <div className={cn('mt-5 grid gap-2', savingsHeld(m) !== m.savingsTarget && 'lg:mt-8')}>
               <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-track">
                 {CATEGORIES.map((c) => (
                   <div key={c.key} style={{ width: share(d.perCategory[c.key].planned) + '%', background: c.tint }} />
@@ -223,6 +223,26 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
           );
         })}
 
+        {m.loans.length > 0 && (
+          <Panel className="p-0 md:p-0 xl:col-span-2">
+            <button type="button" onClick={onLoans} className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-muted/40">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
+                <span className="size-2.5 rounded-full border border-muted-foreground" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">ধার দেওয়া</span>
+                <span className="block text-xs text-muted-foreground">
+                  {[
+                    lentFrom(m, 'spend') > 0 ? 'খরচের টাকা থেকে ' + money(lentFrom(m, 'spend')) : '',
+                    lentFrom(m, 'savings') > 0 ? 'সঞ্চয় থেকে ' + money(lentFrom(m, 'savings')) : ''
+                  ].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <span className="font-fig text-xl font-semibold">{money(lentFrom(m, 'spend') + lentFrom(m, 'savings'))}</span>
+            </button>
+          </Panel>
+        )}
+
         <Panel className="xl:col-span-2">
           <Incomes m={m} d={d} locked={locked} />
         </Panel>
@@ -250,7 +270,7 @@ export function PlanView({ m, d }: { m: Month; d: Derived }) {
 
 function Term({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
-    <div className="grid gap-1.5">
+    <div className="relative grid gap-1.5">
       <label htmlFor={htmlFor} className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>

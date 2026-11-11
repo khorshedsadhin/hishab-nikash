@@ -15,7 +15,7 @@ import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
-export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onCloseMonth: (key: string) => void }) {
+export function ReviewView({ m, d, onCloseMonth, onLoans }: { m: Month; d: Derived; onCloseMonth: (key: string) => void; onLoans: () => void }) {
   const { state, dispatch } = useStore();
   const keys = Object.keys(state.months).sort();
   const at = keys.indexOf(state.activeMonth);
@@ -179,7 +179,7 @@ export function ReviewView({ m, d, onCloseMonth }: { m: Month; d: Derived; onClo
               ))}
             </div>
           )}
-          <Ledger log={m.log} />
+          <Ledger log={m.log} loans={m.loans} onLoans={onLoans} />
         </Panel>
       </div>
     </>

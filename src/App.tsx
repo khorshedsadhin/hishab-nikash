@@ -30,8 +30,8 @@ export function App() {
       <Sidebar view={view} onView={go} onAdd={() => setSheet(true)} />
       <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 pt-5 pb-28 md:px-8 md:pt-8 md:pb-12">
         {view === 'today' && <TodayView m={m} d={d} mode={mode} onMode={setMode} onCloseMonth={setClosing} onView={go} onAdd={() => setSheet(true)} />}
-        {view === 'plan' && <PlanView m={m} d={d} />}
-        {view === 'review' && <ReviewView m={m} d={d} onCloseMonth={setClosing} />}
+        {view === 'plan' && <PlanView m={m} d={d} onLoans={() => go('more')} />}
+        {view === 'review' && <ReviewView m={m} d={d} onCloseMonth={setClosing} onLoans={() => go('more')} />}
         {view === 'more' && <MoreView onOpenMonth={() => go('today')} />}
       </main>
       <MobileNav view={view} onView={go} onAdd={() => setSheet(true)} />

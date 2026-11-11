@@ -5,12 +5,11 @@ import { EntryForm, type EntryMode } from '@/components/EntryForm';
 import { Envelopes } from '@/components/Envelopes';
 import { Ledger } from '@/components/Ledger';
 import { Panel, PanelTitle } from '@/components/Panel';
-import { WeekCard } from '@/components/WeekCard';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import type { View } from '@/components/layout/nav';
 import { prevMonthKey, todayISO, weekdayOf } from '@/lib/dates';
 import { BN_WEEKDAYS_LONG, dayLabel, money, monthLabel, toBn } from '@/lib/format';
-import { canClose, headline, isBlank, streak, type Derived, type Month, type Week } from '@/lib/model';
+import { canClose, headline, isBlank, streak, type Derived, type Month } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 
@@ -63,15 +62,8 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
 
           {!blank && (
             <>
-              <div className="grid gap-3 md:gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-              <Panel>
-                {d.week ? <WeekCard d={d as Derived & { week: Week }} /> : <MonthHero d={d} />}
-                {warn && (
-                  <p className={cn('mt-4 border-t pt-4 text-sm', d.remaining <= 0 ? 'text-danger' : 'text-warning')}>{headline(d)}</p>
-                )}
-              </Panel>
-
-              {d.isCurrent && <div className="grid grid-cols-2 gap-3 md:gap-5 xl:grid-cols-1">
+              {d.isCurrent ? (
+              <div className="grid grid-cols-2 gap-3 md:gap-5">
                 <Tile
                   label="মাসে বাকি"
                   value={money(d.remaining)}
@@ -83,8 +75,16 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
                   value={money(d.committedLeft)}
                   sub={d.committedLeft > 0 ? 'প্রতি মাসের লাইনে এখনো দেওয়া বাকি' : 'সব বাঁধা খরচ দেওয়া হয়ে গেছে'}
                 />
-              </div>}
               </div>
+              ) : (
+                <Panel>
+                  <MonthHero d={d} />
+                </Panel>
+              )}
+
+              {warn && (
+                <p className={cn('text-sm', d.remaining <= 0 ? 'text-danger' : 'text-warning')}>{headline(d)}</p>
+              )}
 
               <Panel>
                 <PanelTitle>খাত</PanelTitle>

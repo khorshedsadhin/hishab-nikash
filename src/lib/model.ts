@@ -647,6 +647,15 @@ export function canClose(state: State, monthKey: string): boolean {
   return monthKey === current && daysInMonth(monthKey) - Number(today.slice(8, 10)) < 3;
 }
 
+/* A plan edit changes what the month promised; a fact records what happened. */
+export type EditKind = 'plan' | 'fact';
+
+/* A lock fixes the plan only, so facts still go into a locked month. */
+export function canEdit(m: Month | undefined, kind: EditKind): boolean {
+  if (!m) return false;
+  return kind === 'fact' || !m.locked;
+}
+
 export type Tone = 'good' | 'warn' | 'bad';
 
 /* Nothing planned and nothing written: the month still needs setting up. */

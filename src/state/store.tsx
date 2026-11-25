@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
-  blankMonth, closePlan, expectedAt, makeNewMonth, migrate,
-  type Check, type CloseInput, type Income, type Line, type Loan, type LogEntry, type Month, type State
+  blankMonth, canEdit, closePlan, expectedAt, makeNewMonth, migrate,
+  type Check, type EditKind, type CloseInput, type Income, type Line, type Loan, type LogEntry, type Month, type State
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
@@ -47,8 +47,63 @@ export type Action =
   | { type: 'restoreMonth'; key: string; month: Month }
   | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
-/* The lock is the plan's promise, so the reducer refuses these, not just the inputs. */
-const PLAN_EDITS = ['updateIncome', 'toggleIncomeRepeat', 'deleteIncome', 'setSavingsTarget', 'addLine', 'updateLine', 'deleteLine', 'toggleRepeat'];
+/* Every action names its edit kind, so a new action cannot skip the lock by mistake.
+   null means the policy does not apply: month lifecycle, navigation, undo and outside data. */
+const EDIT_KIND: Record<Action['type'], EditKind | null> = {
+  addSpend: 'fact',
+  addCheck: 'fact',
+  updateLog: 'fact',
+  deleteLog: 'fact',
+  deleteCheck: 'fact',
+  markZeroDay: 'fact',
+  fillGap: 'fact',
+  addLoan: 'fact',
+  deleteLoan: 'fact',
+  receiveIncome: 'fact',
+  setCashStart: 'fact',
+  setSaved: 'fact',
+  setReflection: 'fact',
+  addIncome: 'plan',
+  updateIncome: 'plan',
+  toggleIncomeRepeat: 'plan',
+  deleteIncome: 'plan',
+  setSavingsTarget: 'plan',
+  addLine: 'plan',
+  updateLine: 'plan',
+  deleteLine: 'plan',
+  toggleRepeat: 'plan',
+  closeMonth: null,
+  reopenMonth: null,
+  setLocked: null,
+  selectMonth: null,
+  openNextMonth: null,
+  deleteMonth: null,
+  importState: null,
+  mergeRemote: null,
+  undoIncome: null,
+  restoreLoan: null,
+  restoreIncome: null,
+  restoreLog: null,
+  restoreLogList: null,
+  restoreCheck: null,
+  restoreLine: null,
+  restoreMonth: null
+};
+
+/* The month an action lands in: the active month, unless the action carries its own date. */
+function touchedMonth(state: State, action: Action): Month | undefined {
+  switch (action.type) {
+    case 'addSpend':
+    case 'updateLog':
+      return state.months[action.date.slice(0, 7)];
+    case 'addLoan':
+      return state.months[action.loan.date.slice(0, 7)];
+    case 'addIncome':
+      return state.months[action.date ? action.date.slice(0, 7) : state.activeMonth];
+    default:
+      return state.months[state.activeMonth];
+  }
+}
 
 /* The app always needs an active month, so dropping the last one leaves a blank current month. */
 function dropMonth(state: State, key: string) {
@@ -80,9 +135,11 @@ export function reducer(prev: State, action: Action): State {
     return state;
   }
 
+  const kind = EDIT_KIND[action.type];
+  if (kind && !canEdit(touchedMonth(prev, action), kind)) return prev;
+
   const state: State = structuredClone(prev);
   const m = state.months[state.activeMonth];
-  if (m.locked && PLAN_EDITS.indexOf(action.type) >= 0) return prev;
 
   switch (action.type) {
     case 'addSpend': {
@@ -175,10 +232,9 @@ export function reducer(prev: State, action: Action): State {
       target.loans.splice(action.index, 0, action.loan);
       break;
     }
-    /* New income is checked against the lock of the month it lands in, not the active month. */
     case 'addIncome': {
       const target = action.date ? state.months[action.date.slice(0, 7)] : m;
-      if (!target || target.locked) return prev;
+      if (!target) return prev;
       target.incomes.push({
         id: action.id ?? uid(),
         name: action.name.trim(),
@@ -253,6 +309,8 @@ export function reducer(prev: State, action: Action): State {
       state.activeMonth = nextKey;
       break;
     }
+    /* Reopen clears the closed mark only; the lock, saved, the close-day check
+       and the next month's cashStart stay until the next close. */
     case 'reopenMonth':
       m.closed = false;
       break;

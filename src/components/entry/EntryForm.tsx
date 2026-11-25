@@ -1,4 +1,4 @@
-import { type Derived, type Month } from '@/lib/model';
+import { canEdit, type Derived, type Month } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { IncomeForm, LockedIncome } from './IncomeForm';
 import { LoanForm } from './LoanForm';
@@ -36,10 +36,10 @@ export function EntryForm({ m, d, mode, onMode, onDone }: {
         <SpendForm m={m} d={d} onDone={onDone} />
       ) : mode === 'loan' ? (
         <LoanForm d={d} onDone={onDone} />
-      ) : m.locked ? (
-        <LockedIncome m={m} />
-      ) : (
+      ) : canEdit(m, 'plan') ? (
         <IncomeForm onDone={onDone} />
+      ) : (
+        <LockedIncome m={m} />
       )}
     </div>
   );

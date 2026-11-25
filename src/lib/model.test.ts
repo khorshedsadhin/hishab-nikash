@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultDateIn, monthRange } from './dates';
 import { money } from './format';
 import {
-  blankMonth, bookBalance, canClose, closePlan, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
+  blankMonth, bookBalance, canClose, canEdit, closePlan, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
   isBlank, loanBook, loanName, loanRows, loanSourceLabel, loanTitle, migrate, repaymentFor, reconRows, savingsHeld, streak, tone, type CloseInput, type Month, type State
 } from './model';
-import { reducer } from '@/state/store';
+import { reducer, type Action } from '@/state/store';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -337,6 +337,99 @@ describe('lock', () => {
     const m = september();
     m.locked = true;
     expect(makeNewMonth(m).locked).toBe(false);
+  });
+});
+
+describe('month policy', () => {
+  function locked(): State {
+    const m = september();
+    m.locked = true;
+    m.incomes.push({ id: 'J', name: 'income-b', amount: 500, date: null, repeat: false });
+    return { activeMonth: '2026-09', months: { '2026-09': m } };
+  }
+
+  it('allows nothing on a missing month', () => {
+    expect(canEdit(undefined, 'plan')).toBe(false);
+    expect(canEdit(undefined, 'fact')).toBe(false);
+  });
+
+  it('allows plan edits only on an unlocked month', () => {
+    const m = september();
+    expect(canEdit(m, 'plan')).toBe(true);
+    m.locked = true;
+    expect(canEdit(m, 'plan')).toBe(false);
+    expect(canEdit(m, 'fact')).toBe(true);
+  });
+
+  it('refuses every plan edit on a locked month', () => {
+    const state = locked();
+    const edits: Action[] = [
+      { type: 'updateIncome', id: 'I', amount: 1 },
+      { type: 'toggleIncomeRepeat', id: 'I' },
+      { type: 'deleteIncome', id: 'I' },
+      { type: 'setSavingsTarget', value: 1 },
+      { type: 'addLine', cat: 'needs', id: 'Z' },
+      { type: 'updateLine', cat: 'needs', id: 'A', amount: 1 },
+      { type: 'deleteLine', cat: 'needs', id: 'A' },
+      { type: 'toggleRepeat', cat: 'needs', id: 'A' },
+      { type: 'addIncome', name: 'income-c', amount: 100, date: '2026-09-15', repeat: false, toSavings: 0 },
+      { type: 'addIncome', name: 'income-c', amount: 100, date: null, repeat: false, toSavings: 0 }
+    ];
+    for (const a of edits) expect(reducer(state, a), a.type).toBe(state);
+  });
+
+  it('takes every fact on a locked month', () => {
+    const state = locked();
+    const facts: Action[] = [
+      { type: 'addSpend', date: '2026-09-16', cat: 'wants', amount: 50, pick: '', name: 'entry-4' },
+      { type: 'addLoan', loan: { id: 'L', name: 'person-a', amount: 100, date: '2026-09-10', from: 'spend' } },
+      { type: 'receiveIncome', id: 'J', date: '2026-09-10' },
+      { type: 'addCheck', date: '2026-09-15', amount: 100 },
+      { type: 'setCashStart', value: 300 }
+    ];
+    for (const a of facts) expect(reducer(state, a), a.type).not.toBe(state);
+    expect(reducer(state, { type: 'setCashStart', value: 300 }).months['2026-09'].cashStart).toBe(300);
+  });
+
+  it('refuses an income dated into a locked month while the active month is open', () => {
+    const aug = blankMonth();
+    aug.locked = true;
+    const state: State = { activeMonth: '2026-09', months: { '2026-08': aug, '2026-09': september() } };
+    expect(reducer(state, {
+      type: 'addIncome', name: 'income-c', amount: 100, date: '2026-08-20', repeat: false, toSavings: 0
+    })).toBe(state);
+  });
+
+  it('takes an income dated into an open month while the active month is locked', () => {
+    const state = locked();
+    state.months['2026-08'] = blankMonth();
+    const next = reducer(state, {
+      type: 'addIncome', name: 'income-c', amount: 100, date: '2026-08-20', repeat: false, toSavings: 0
+    });
+    expect(next.months['2026-08'].incomes.at(-1)).toMatchObject({ name: 'income-c' });
+  });
+
+  it('reopens a closed month and keeps its lock, savings, cash check and next start', () => {
+    const aug = blankMonth();
+    aug.incomes = [{ id: 'I', name: 'income-a', amount: 10000, date: '2026-08-01', repeat: true }];
+    aug.savingsTarget = 2000;
+    aug.log = [{ id: 'x', date: '2026-08-10', name: '', cat: 'needs', amount: 7000, lineId: null }];
+    const start: State = { activeMonth: '2026-08', months: { '2026-08': aug } };
+    const input: CloseInput = { saved: 2000, cash: 900, fill: false, extra: 0, nextSavingsTarget: 2000 };
+    const closed = reducer(start, { type: 'closeMonth', month: '2026-08', input, reflection: '' });
+    const before = closed.months['2026-08'];
+    expect(canClose(closed, '2026-08')).toBe(false);
+
+    let next = reducer(closed, { type: 'selectMonth', key: '2026-08' });
+    next = reducer(next, { type: 'reopenMonth' });
+    const m = next.months['2026-08'];
+    expect(m.closed).toBe(false);
+    expect(m.locked).toBe(true);
+    expect(m.saved).toBe(before.saved);
+    expect(m.checks).toEqual(before.checks);
+    expect(m.checks.some((c) => c.date === '2026-08-31' && c.amount === 900)).toBe(true);
+    expect(next.months['2026-09'].cashStart).toBe(900);
+    expect(canClose(next, '2026-08')).toBe(true);
   });
 });
 

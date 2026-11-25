@@ -1,4 +1,4 @@
-import { addDaysISO, daysApart, daysInMonth, nextMonthKey, pad, prevMonthKey, saturdayOf, todayISO, uid } from './dates';
+import { addDaysISO, daysApart, daysInMonth, lastDayOf, nextMonthKey, prevMonthKey, saturdayOf, todayISO, uid } from './dates';
 import { dayLabel, money, toBn } from './format';
 
 export type CatKey = 'needs' | 'wants' | 'giving' | 'unexpected';
@@ -547,10 +547,6 @@ export function deriveMonth(state: State, monthKey: string): Derived {
 }
 
 /* Month-end close. */
-
-export function lastDayOf(monthKey: string): string {
-  return monthKey + '-' + pad(daysInMonth(monthKey));
-}
 
 /* The day the close is counted on: the month's last day, or today if it has not ended. */
 export function closeDate(monthKey: string): string {

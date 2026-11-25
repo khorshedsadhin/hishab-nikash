@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { Derived, Month } from '@/lib/model';
 import { useStore } from '@/state/store';
-import { EntryForm, type EntryMode } from './EntryForm';
+import { EntryForm, type EntryMode } from './entry/EntryForm';
 
 /* A bottom sheet on phones, a centered dialog on wider screens. */
 export function EntrySheet({ open, onOpenChange, mode, onMode, m, d }: {

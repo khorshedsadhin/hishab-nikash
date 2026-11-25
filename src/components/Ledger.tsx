@@ -6,7 +6,7 @@ import { dayLabel, money } from '@/lib/format';
 import { CATEGORIES, catLabel, deriveMonth, loanSourceLabel, loanTitle, type Loan, type LogEntry } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { useStore } from '@/state/store';
-import { SpendForm } from './EntryForm';
+import { SpendForm } from './entry/SpendForm';
 
 /* Spends and loans share one timeline; a loan opens the loan list rather than the spend editor. */
 export function Ledger({ log, loans = [], days, onLoans }: { log: LogEntry[]; loans?: Loan[]; days?: number; onLoans?: () => void }) {

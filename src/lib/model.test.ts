@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defaultDateIn, monthRange } from './dates';
 import { money } from './format';
 import {
   blankMonth, bookBalance, canClose, closePlan, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
@@ -35,6 +36,18 @@ describe('format', () => {
     expect(money(1234567)).toBe('৳১,২৩৪,৫৬৭');
     expect(money(-500)).toBe('−৳৫০০');
     expect(money(12.6)).toBe('৳১৩');
+  });
+});
+
+describe('dates', () => {
+  it('defaults an entry to today inside the current month, else the first day', () => {
+    expect(defaultDateIn('2026-09')).toBe('2026-09-15');
+    expect(defaultDateIn('2026-08')).toBe('2026-08-01');
+    expect(defaultDateIn('2026-10')).toBe('2026-10-01');
+  });
+
+  it('gives the date range of a month', () => {
+    expect(monthRange('2026-02')).toEqual({ start: '2026-02-01', end: '2026-02-28' });
   });
 });
 

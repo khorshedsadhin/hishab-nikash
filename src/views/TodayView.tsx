@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { CalendarCheck2, CalendarX, Check, ChevronRight, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { EntryForm, type EntryMode } from '@/components/EntryForm';
+import { EntryForm, type EntryMode } from '@/components/entry/EntryForm';
 import { Envelopes } from '@/components/Envelopes';
 import { Ledger } from '@/components/Ledger';
 import { Panel, PanelTitle } from '@/components/Panel';

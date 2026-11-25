@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/NumberInput';
 import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
-import { prevMonthKey, todayISO, uid } from '@/lib/dates';
+import { defaultDateIn, prevMonthKey, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
 import { CATEGORIES, carryInto, loanSourceLabel, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
@@ -286,11 +286,6 @@ function Op({ children }: { children: ReactNode }) {
 function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
   const { state, dispatch } = useStore();
   const [newId, setNewId] = useState<string | null>(null);
-  const arrivalDate = () => {
-    const today = todayISO();
-    const first = state.activeMonth + '-01';
-    return today.slice(0, 7) === state.activeMonth ? today : first;
-  };
 
   function remove(x: Income) {
     const month = state.activeMonth;
@@ -359,7 +354,7 @@ function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
               <button
                 type="button"
                 title="আসবে। এলে চাপো"
-                onClick={() => dispatch({ type: 'receiveIncome', id: x.id, date: arrivalDate() })}
+                onClick={() => dispatch({ type: 'receiveIncome', id: x.id, date: defaultDateIn(state.activeMonth) })}
                 className="min-h-8 w-28 shrink-0 rounded-full border border-dashed border-input px-2 text-xs text-muted-foreground hover:border-primary hover:text-primary"
               >
                 এলে চাপো

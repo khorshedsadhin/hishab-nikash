@@ -66,3 +66,18 @@ export function prevMonthKey(monthKey: string): string {
   }
   return y + '-' + pad(mo);
 }
+
+export function lastDayOf(monthKey: string): string {
+  return monthKey + '-' + pad(daysInMonth(monthKey));
+}
+
+/* First and last day of a month, the range an entry's date may take. */
+export function monthRange(monthKey: string): { start: string; end: string } {
+  return { start: monthKey + '-01', end: lastDayOf(monthKey) };
+}
+
+/* Today when it falls in the month, otherwise the month's first day. */
+export function defaultDateIn(monthKey: string): string {
+  const today = todayISO();
+  return today.slice(0, 7) === monthKey ? today : monthKey + '-01';
+}

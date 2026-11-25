@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CloseMonth } from '@/components/CloseMonth';
-import type { EntryMode } from '@/components/EntryForm';
+import type { EntryMode } from '@/components/entry/EntryForm';
 import { EntrySheet } from '@/components/EntrySheet';
 import { MobileNav, Sidebar } from '@/components/layout/Sidebar';
 import type { View } from '@/components/layout/nav';

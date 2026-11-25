@@ -82,7 +82,7 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
 
               <Panel>
                 <PanelTitle>খাত</PanelTitle>
-                <Envelopes d={d} loans={m.loans} onLoans={() => onView('more')} />
+                <Envelopes d={d} onLoans={() => onView('more')} />
               </Panel>
             </>
           )}

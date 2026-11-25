@@ -11,7 +11,7 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { prevMonthKey, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
-import { CATEGORIES, carryInto, lentFrom, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
+import { CATEGORIES, carryInto, loanSourceLabel, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -233,12 +233,12 @@ export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () 
                 <span className="block font-medium">ধার দেওয়া</span>
                 <span className="block text-xs text-muted-foreground">
                   {[
-                    lentFrom(m, 'spend') > 0 ? 'খরচের টাকা থেকে ' + money(lentFrom(m, 'spend')) : '',
-                    lentFrom(m, 'savings') > 0 ? 'সঞ্চয় থেকে ' + money(lentFrom(m, 'savings')) : ''
+                    d.lent > 0 ? loanSourceLabel('spend') + ' ' + money(d.lent) : '',
+                    d.lentSavings > 0 ? loanSourceLabel('savings') + ' ' + money(d.lentSavings) : ''
                   ].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              <span className="font-fig text-xl font-semibold">{money(lentFrom(m, 'spend') + lentFrom(m, 'savings'))}</span>
+              <span className="font-fig text-xl font-semibold">{money(d.lent + d.lentSavings)}</span>
             </button>
           </Panel>
         )}

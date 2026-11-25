@@ -3,7 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money } from '@/lib/format';
-import { CATEGORIES, catLabel, deriveMonth, type Loan, type LogEntry } from '@/lib/model';
+import { CATEGORIES, catLabel, deriveMonth, loanSourceLabel, loanTitle, type Loan, type LogEntry } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { useStore } from '@/state/store';
 import { SpendForm } from './EntryForm';
@@ -90,13 +90,13 @@ export function Ledger({ log, loans = [], days, onLoans }: { log: LogEntry[]; lo
                       key={l.id}
                       type="button"
                       onClick={onLoans}
-                      aria-label={'ধার, ' + l.name + ', ' + money(l.amount)}
+                      aria-label={loanTitle(l) + ', ' + money(l.amount)}
                       className="group flex min-h-11 w-full items-center gap-3 rounded-lg px-2 text-left hover:bg-muted/60"
                     >
                       <span className="size-2 shrink-0 rounded-full border border-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">ধার, {l.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{loanTitle(l)}</span>
                       <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                        {l.from === 'savings' ? 'সঞ্চয় থেকে' : 'ধার'}
+                        {loanSourceLabel(l.from)}
                       </span>
                       <span className="shrink-0 text-right font-fig text-muted-foreground">{money(l.amount)}</span>
                       <ChevronRight className="size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />

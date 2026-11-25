@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { money } from './format';
 import {
   blankMonth, bookBalance, canClose, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
-  isBlank, loanRows, migrate, reconRows, savingsHeld, streak, tone, type Month, type State
+  isBlank, loanBook, loanName, loanRows, loanSourceLabel, loanTitle, migrate, repaymentFor, reconRows, savingsHeld, streak, tone, type Month, type State
 } from './model';
 import { reducer } from '@/state/store';
 
@@ -508,6 +508,8 @@ describe('loans', () => {
     expect(d.remaining).toBe(base.remaining - 500);
     expect(d.actual).toBe(base.actual);
     expect(d.perCategory.needs.actual).toBe(base.perCategory.needs.actual);
+    expect(d.lentNames).toEqual(['person-a']);
+    expect(d.lentSavings).toBe(0);
     expect(savingsHeld(m)).toBe(2000);
   });
 
@@ -598,10 +600,61 @@ describe('loans', () => {
 
   it('deletes and restores a loan', () => {
     let state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
-    state = reducer(state, { type: 'deleteLoan', month: '2026-09', id: 'L1' });
+    state = reducer(state, { type: 'deleteLoan', id: 'L1' });
     expect(state.months['2026-09'].loans).toHaveLength(0);
     state = reducer(state, { type: 'restoreLoan', month: '2026-09', loan: lend('spend'), index: 0 });
     expect(state.months['2026-09'].loans).toHaveLength(1);
+  });
+
+  it('deletes a loan together with its repayments in every month', () => {
+    const m = september();
+    m.loans = [lend('spend')];
+    m.incomes.push({ id: 'R1', name: 'x', amount: 100, date: '2026-09-12', repeat: false, loanId: 'L1' });
+    const oct = blankMonth();
+    oct.locked = true;
+    oct.incomes = [
+      { id: 'R2', name: 'x', amount: 200, date: '2026-10-03', repeat: false, loanId: 'L1' },
+      { id: 'O', name: 'other', amount: 50, date: '2026-10-03', repeat: false }
+    ];
+    const state: State = { activeMonth: '2026-10', months: { '2026-09': m, '2026-10': oct } };
+    const next = reducer(state, { type: 'deleteLoan', id: 'L1' });
+    expect(next.months['2026-09'].loans).toEqual([]);
+    expect(next.months['2026-09'].incomes.map((x) => x.id)).toEqual(['I']);
+    expect(next.months['2026-10'].incomes.map((x) => x.id)).toEqual(['O']);
+  });
+
+  it('never repeats a repayment', () => {
+    const state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
+    const next = reducer(state, {
+      type: 'addIncome', id: 'R', name: 'x', amount: 100, date: '2026-09-15', repeat: true, toSavings: 0, loanId: 'L1'
+    });
+    expect(next.months['2026-09'].incomes.at(-1)!.repeat).toBe(false);
+  });
+
+  it('splits loans into open and closed with what is still owed', () => {
+    const m = september();
+    m.loans = [lend('spend'), { ...lend('savings', 300), id: 'L2', date: '2026-09-11' }, { ...lend('spend', 100), id: 'L3', date: '2026-09-12' }];
+    m.incomes.push({ id: 'R', name: 'x', amount: 300, date: '2026-09-13', repeat: false, loanId: 'L2' });
+    m.incomes.push({ id: 'R3', name: 'x', amount: 100, date: '2026-09-13', repeat: false, loanId: 'L3' });
+    const book = loanBook(stateWith(m));
+    expect(book.open.map((r) => r.loan.id)).toEqual(['L1']);
+    expect(book.closed.map((r) => r.loan.id)).toEqual(['L3', 'L2']);
+    expect(book.owed).toBe(500);
+  });
+
+  it('labels loans the same way everywhere', () => {
+    expect(loanSourceLabel('spend')).toBe('খরচের টাকা থেকে');
+    expect(loanSourceLabel('savings')).toBe('সঞ্চয় থেকে');
+    expect(loanName({ ...lend('spend'), name: '' })).toBe('ধার');
+    expect(loanTitle(lend('spend'))).toBe('ধার, person-a');
+    expect(loanTitle({ ...lend('spend'), name: '' })).toBe('ধার');
+  });
+
+  it('starts a repayment at what is still owed', () => {
+    const m = september();
+    m.loans = [lend('spend')];
+    m.incomes.push({ id: 'R', name: 'x', amount: 200, date: '2026-09-13', repeat: false, loanId: 'L1' });
+    expect(repaymentFor(loanRows(stateWith(m))[0])).toEqual({ name: 'ধার ফেরত, person-a', amount: 300, loanId: 'L1' });
   });
 
   it('refuses an empty loan', () => {

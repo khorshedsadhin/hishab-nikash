@@ -1,7 +1,7 @@
 import { Check, Trash2 } from 'lucide-react';
 import { Panel, PanelTitle } from '@/components/Panel';
 import { dayLabel, money } from '@/lib/format';
-import { loanRows, type LoanRow } from '@/lib/model';
+import { loanBook, loanName, loanSourceLabel, type Income, type LoanRow } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -9,15 +9,22 @@ import { useStore } from '@/state/store';
 /* Every loan across all months; paying one back is done from the income form. */
 export function LoanList() {
   const { state, dispatch } = useStore();
-  const rows = loanRows(state);
-  const open = rows.filter((r) => r.left > 0);
-  const done = rows.filter((r) => r.left <= 0).reverse();
-  const owed = open.reduce((s, r) => s + r.left, 0);
+  const { open, closed: done, owed } = loanBook(state);
+  const empty = open.length === 0 && done.length === 0;
 
   function remove(r: LoanRow) {
     const index = state.months[r.month].loans.findIndex((l) => l.id === r.loan.id);
-    dispatch({ type: 'deleteLoan', month: r.month, id: r.loan.id });
-    undoToast('ধার মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreLoan', month: r.month, loan: r.loan, index }));
+    const repaid: { month: string; income: Income; index: number }[] = [];
+    Object.keys(state.months).forEach((month) => {
+      state.months[month].incomes.forEach((income, i) => {
+        if (income.loanId === r.loan.id) repaid.push({ month, income, index: i });
+      });
+    });
+    dispatch({ type: 'deleteLoan', id: r.loan.id });
+    undoToast('ধার মুছে ফেলা হয়েছে।', () => {
+      dispatch({ type: 'restoreLoan', month: r.month, loan: r.loan, index });
+      repaid.forEach((x) => dispatch({ type: 'restoreIncome', ...x }));
+    });
   }
 
   return (
@@ -29,7 +36,7 @@ export function LoanList() {
         ধার
       </PanelTitle>
       <div className="divide-y border-t">
-        {rows.length === 0 && (
+        {empty && (
           <p className="px-5 py-5 text-sm text-muted-foreground">
             কাউকে ধার দিলে এখানে থাকবে। লেখো থেকে <b className="font-medium text-foreground">ধার</b> ট্যাবে লেখো।
           </p>
@@ -49,9 +56,9 @@ function Row({ r, onDelete }: { r: LoanRow; onDelete: () => void }) {
   return (
     <div className={cn('flex min-h-14 items-center gap-3 px-5 py-2', cleared && 'text-muted-foreground')}>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px]">{r.loan.name || 'ধার'}</div>
+        <div className="truncate text-[15px]">{loanName(r.loan)}</div>
         <div className="text-xs text-muted-foreground">
-          {dayLabel(r.loan.date)} · {r.loan.from === 'savings' ? 'সঞ্চয় থেকে' : 'খরচের টাকা থেকে'}
+          {dayLabel(r.loan.date)} · {loanSourceLabel(r.loan.from)}
           {!cleared && r.returned > 0 && ' · ' + money(r.returned) + ' ফেরত এসেছে'}
         </div>
       </div>

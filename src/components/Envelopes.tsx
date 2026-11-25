@@ -1,12 +1,11 @@
 import type { CSSProperties } from 'react';
 import { money } from '@/lib/format';
-import { CATEGORIES, type Derived, type Loan } from '@/lib/model';
+import { CATEGORIES, type Derived } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { Meter } from './Panel';
 
 /* Each category as an envelope: what is left of its plan. */
-export function Envelopes({ d, loans = [], onLoans }: { d: Derived; loans?: Loan[]; onLoans?: () => void }) {
-  const lent = loans.filter((l) => l.from === 'spend');
+export function Envelopes({ d, onLoans }: { d: Derived; onLoans?: () => void }) {
   return (
     <div className="grid gap-x-6 sm:grid-cols-2">
       {CATEGORIES.map((c) => {
@@ -42,7 +41,7 @@ export function Envelopes({ d, loans = [], onLoans }: { d: Derived; loans?: Loan
           </div>
         );
       })}
-      {lent.length > 0 && (
+      {d.lentNames.length > 0 && (
         <button
           type="button"
           onClick={onLoans}
@@ -53,7 +52,7 @@ export function Envelopes({ d, loans = [], onLoans }: { d: Derived; loans?: Loan
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[15px] font-medium">ধার দেওয়া</span>
-            <span className="block text-xs text-muted-foreground">{lent.map((l) => l.name).join(', ')}</span>
+            <span className="block text-xs text-muted-foreground">{d.lentNames.join(', ')}</span>
           </span>
           <span className="font-fig text-[15px] font-semibold whitespace-nowrap">{money(d.lent)}</span>
         </button>

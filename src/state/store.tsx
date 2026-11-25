@@ -18,7 +18,7 @@ export type Action =
   | { type: 'addIncome'; id?: string; name: string; amount: number; date: string | null; repeat: boolean; toSavings: number; loanId?: string }
   | { type: 'undoIncome'; month: string; id: string; toSavings: number }
   | { type: 'addLoan'; loan: Loan }
-  | { type: 'deleteLoan'; month: string; id: string }
+  | { type: 'deleteLoan'; id: string }
   | { type: 'restoreLoan'; month: string; loan: Loan; index: number }
   | { type: 'updateIncome'; id: string; name?: string; amount?: number }
   | { type: 'receiveIncome'; id: string; date: string | null }
@@ -170,10 +170,14 @@ export function reducer(prev: State, action: Action): State {
       target.loans.push({ ...action.loan, name: action.loan.name.trim() });
       break;
     }
+    /* A repayment means nothing without its loan, so both go together, in any month. */
     case 'deleteLoan': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.loans = target.loans.filter((l) => l.id !== action.id);
+      const owner = Object.values(state.months).find((x) => x.loans.some((l) => l.id === action.id));
+      if (!owner) return prev;
+      owner.loans = owner.loans.filter((l) => l.id !== action.id);
+      Object.values(state.months).forEach((x) => {
+        x.incomes = x.incomes.filter((i) => i.loanId !== action.id);
+      });
       break;
     }
     case 'restoreLoan': {
@@ -191,7 +195,8 @@ export function reducer(prev: State, action: Action): State {
         name: action.name.trim(),
         amount: action.amount,
         date: action.date,
-        repeat: action.repeat,
+        /* A repayment is a one-off, never part of next month's plan. */
+        repeat: action.loanId ? false : action.repeat,
         ...(action.loanId ? { loanId: action.loanId } : {})
       });
       if (action.toSavings > 0) target.savingsTarget += Math.min(action.toSavings, action.amount);

@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/NumberInput';
 import { addDaysISO, pad, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay } from '@/lib/format';
-import { CATEGORIES, loanRows, savingsHeld, type CatKey, type Derived, type LoanSource, type LogEntry, type Month } from '@/lib/model';
+import { CATEGORIES, LOAN_SOURCES, loanBook, loanName, repaymentFor, savingsHeld, type CatKey, type Derived, type LoanSource, type LogEntry, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -322,17 +322,12 @@ function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
     }
     const loan = { id: uid(), date: when, name, amount: amt, from };
     dispatch({ type: 'addLoan', loan });
-    undoToast(money(amt) + ' ধার লেখা হয়েছে।', () => dispatch({ type: 'deleteLoan', month: key, id: loan.id }));
+    undoToast(money(amt) + ' ধার লেখা হয়েছে।', () => dispatch({ type: 'deleteLoan', id: loan.id }));
     setAmount(null);
     setName('');
     if (onDone) onDone();
     else amountRef.current?.focus();
   }
-
-  const sources = [
-    { key: 'spend', label: 'খরচের টাকা থেকে' },
-    { key: 'savings', label: 'সঞ্চয় থেকে' }
-  ] as const;
 
   return (
     <form onSubmit={submit} className="grid gap-4" style={{ '--tint': 'var(--primary)' } as CSSProperties}>
@@ -348,7 +343,7 @@ function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
       <fieldset>
         <legend className="mb-2 text-sm text-muted-foreground">কোন টাকা থেকে দিলে?</legend>
         <div className="flex flex-wrap gap-2">
-          {sources.map((o) => (
+          {LOAN_SOURCES.map((o) => (
             <button
               key={o.key}
               type="button"
@@ -418,7 +413,7 @@ function LockedIncome({ m }: { m: Month }) {
 function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
   const { state, dispatch } = useStore();
   const range = useDateRange(d);
-  const open = loanRows(state).filter((r) => r.left > 0);
+  const { open } = loanBook(state);
   const [loanId, setLoanId] = useState<string | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -456,9 +451,10 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
 
   /* Choosing a loan fills in the name and the amount still owed. */
   function pickLoan(r: (typeof open)[number] | null) {
-    setLoanId(r ? r.loan.id : null);
-    setName(r ? 'ধার ফেরত, ' + r.loan.name : '');
-    if (r && !amount) setAmount(r.left);
+    const pay = r ? repaymentFor(r) : null;
+    setLoanId(pay ? pay.loanId : null);
+    setName(pay ? pay.name : '');
+    if (pay && !amount) setAmount(pay.amount);
   }
 
   const shares = [
@@ -482,7 +478,7 @@ function IncomeForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
                 onClick={() => pickLoan(loanId === r.loan.id ? null : r)}
                 className={cn(chip, loanId === r.loan.id ? chipOn : chipOff)}
               >
-                {r.loan.name || 'ধার'} · {money(r.left)}
+                {loanName(r.loan)} · {money(r.left)}
               </button>
             ))}
           </div>

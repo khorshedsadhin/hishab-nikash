@@ -186,6 +186,54 @@ export function loanRows(state: State): LoanRow[] {
   return rows.sort((a, b) => (a.loan.date < b.loan.date ? -1 : a.loan.date > b.loan.date ? 1 : 0));
 }
 
+export interface LoanBook {
+  /* Still owed, oldest first. */
+  open: LoanRow[];
+  /* Fully repaid, newest first. */
+  closed: LoanRow[];
+  owed: number;
+}
+
+export function loanBook(state: State): LoanBook {
+  const rows = loanRows(state);
+  const open = rows.filter((r) => r.left > 0);
+  return {
+    open,
+    closed: rows.filter((r) => r.left <= 0).reverse(),
+    owed: open.reduce((s, r) => s + r.left, 0)
+  };
+}
+
+export const LOAN_SOURCES: { key: LoanSource; label: string }[] = [
+  { key: 'spend', label: 'খরচের টাকা থেকে' },
+  { key: 'savings', label: 'সঞ্চয় থেকে' }
+];
+
+export function loanSourceLabel(from: LoanSource): string {
+  return LOAN_SOURCES.find((s) => s.key === from)!.label;
+}
+
+/* The loan's name on its own, as in the loan list. */
+export function loanName(loan: Loan): string {
+  return loan.name || 'ধার';
+}
+
+/* The loan as one line among spends, marked as a loan. */
+export function loanTitle(loan: Loan): string {
+  return loan.name ? 'ধার, ' + loan.name : 'ধার';
+}
+
+export interface Repayment {
+  name: string;
+  amount: number;
+  loanId: string;
+}
+
+/* A repayment starts as everything still owed on the loan. */
+export function repaymentFor(row: LoanRow): Repayment {
+  return { name: 'ধার ফেরত, ' + loanName(row.loan), amount: row.left, loanId: row.loan.id };
+}
+
 /* Brings older saves up to the current Month shape by filling every missing field with its default. */
 export function migrate(s: any): State {
   Object.keys(s.months).forEach((k) => {
@@ -298,6 +346,10 @@ export interface Derived {
   actual: number;
   /* Lent out of the spendable pool; savings loans are not here. */
   lent: number;
+  /* Lent out of savings. */
+  lentSavings: number;
+  /* Who borrowed from the spendable pool this month. */
+  lentNames: string[];
   remaining: number;
   committedLeft: number;
   safeRemaining: number;
@@ -441,6 +493,8 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     lineActual,
     actual,
     lent,
+    lentSavings: lentFrom(m, 'savings'),
+    lentNames: (m.loans || []).filter((l) => l.from === 'spend').map(loanName),
     remaining,
     committedLeft,
     safeRemaining,

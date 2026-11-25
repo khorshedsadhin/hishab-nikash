@@ -320,6 +320,8 @@ export interface CategoryTotals {
   actual: number;
   committed: number;
   unlinked: number;
+  /* Planned minus actual; below zero when the category went over. */
+  left: number;
 }
 
 export interface Week {
@@ -337,6 +339,8 @@ export interface Derived {
   carry: number;
   income: number;
   received: number;
+  /* Income written down but not arrived yet. */
+  expected: number;
   spendable: number;
   planned: number;
   buffer: number;
@@ -351,6 +355,11 @@ export interface Derived {
   /* Who borrowed from the spendable pool this month. */
   lentNames: string[];
   remaining: number;
+  savingsHeld: number;
+  /* What was saved once written at the close, the savings held before that. */
+  savedOrHeld: number;
+  /* Carry plus received income, minus savings, spending and everything lent. */
+  leftAfterSaved: number;
   committedLeft: number;
   safeRemaining: number;
   expectedByNow: number;
@@ -445,7 +454,8 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
       repeating: catRepeating,
       actual: catActual,
       committed: catCommitted,
-      unlinked: catActual - catLinked
+      unlinked: catActual - catLinked,
+      left: catPlanned - catActual
     };
     planned += catPlanned;
     repeating += catRepeating;
@@ -455,7 +465,11 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
   const buffer = spendable - planned;
   const actual = log.reduce((s, e) => s + (e.amount || 0), 0);
   const lent = lentFrom(m, 'spend');
+  const lentSavings = lentFrom(m, 'savings');
   const remaining = spendable - actual - lent;
+  const received = (m.incomes || []).reduce((s, x) => s + (x.date != null ? (x.amount || 0) : 0), 0);
+  const held = savingsHeld(m);
+  const savedOrHeld = m.saved ?? held;
   const safeRemaining = remaining - committedLeft;
 
   const todayStr = todayISO();
@@ -484,7 +498,8 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
   return {
     carry,
     income,
-    received: (m.incomes || []).reduce((s, x) => s + (x.date != null ? (x.amount || 0) : 0), 0),
+    received,
+    expected: income - received,
     spendable,
     planned,
     buffer,
@@ -493,9 +508,12 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     lineActual,
     actual,
     lent,
-    lentSavings: lentFrom(m, 'savings'),
+    lentSavings,
     lentNames: (m.loans || []).filter((l) => l.from === 'spend').map(loanName),
     remaining,
+    savingsHeld: held,
+    savedOrHeld,
+    leftAfterSaved: carry + received - savedOrHeld - actual - lent - lentSavings,
     committedLeft,
     safeRemaining,
     expectedByNow,

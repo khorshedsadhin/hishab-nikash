@@ -11,7 +11,7 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { prevMonthKey, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
-import { CATEGORIES, carryInto, loanSourceLabel, savingsHeld, type Derived, type Income, type Month } from '@/lib/model';
+import { CATEGORIES, carryInto, loanSourceLabel, type Derived, type Income, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -66,9 +66,9 @@ export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () 
                 onValue={(v) => dispatch({ type: 'setSavingsTarget', value: v ?? 0 })}
                 className="h-10 rounded-xl font-fig text-lg"
               />
-              {savingsHeld(m) !== m.savingsTarget && (
+              {d.savingsHeld !== m.savingsTarget && (
                 <p className="mt-1 text-xs text-muted-foreground lg:absolute lg:top-full lg:left-0 lg:mt-0 lg:whitespace-nowrap">
-                  সঞ্চয় {money(savingsHeld(m))} / লক্ষ্য {money(m.savingsTarget)}
+                  সঞ্চয় {money(d.savingsHeld)} / লক্ষ্য {money(m.savingsTarget)}
                 </p>
               )}
             </Term>
@@ -93,7 +93,7 @@ export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () 
             </div>
           </div>
 
-          <div className={cn('mt-5 grid gap-2', savingsHeld(m) !== m.savingsTarget && 'lg:mt-8')}>
+          <div className={cn('mt-5 grid gap-2', d.savingsHeld !== m.savingsTarget && 'lg:mt-8')}>
               <div className="flex h-3 gap-0.5 overflow-hidden rounded-full bg-track">
                 {CATEGORIES.map((c) => (
                   <div key={c.key} style={{ width: share(d.perCategory[c.key].planned) + '%', background: c.tint }} />
@@ -304,7 +304,7 @@ function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
       <PanelTitle
         action={
           <span className="text-sm text-muted-foreground">
-            এসেছে {money(d.received)}{d.income > d.received ? ' · আসবে ' + money(d.income - d.received) : ''}
+            এসেছে {money(d.received)}{d.expected > 0 ? ' · আসবে ' + money(d.expected) : ''}
           </span>
         }
       >

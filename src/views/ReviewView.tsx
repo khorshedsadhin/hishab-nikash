@@ -10,7 +10,7 @@ import { Meter, Panel, PanelTitle } from '@/components/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money, monthLabel } from '@/lib/format';
-import { CATEGORIES, canClose, lentFrom, reconRows, savedTotal, savingsHeld, type Derived, type Month } from '@/lib/model';
+import { CATEGORIES, canClose, reconRows, savedTotal, type Derived, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -20,9 +20,9 @@ export function ReviewView({ m, d, onCloseMonth, onLoans }: { m: Month; d: Deriv
   const keys = Object.keys(state.months).sort();
   const at = keys.indexOf(state.activeMonth);
   const saved = m.saved ?? 0;
-  const held = savingsHeld(m);
-  const savedPlan = m.saved ?? held;
-  const left = d.income + d.carry - savedPlan - d.actual - d.lent - lentFrom(m, 'savings');
+  const held = d.savingsHeld;
+  const savedPlan = d.savedOrHeld;
+  const left = d.leftAfterSaved;
   const total = Math.max(1, savedPlan + d.actual + Math.max(0, left));
   const pct = (n: number) => (Math.max(0, n) / total) * 100;
 
@@ -102,7 +102,7 @@ export function ReviewView({ m, d, onCloseMonth, onLoans }: { m: Month; d: Deriv
                 <div className="bg-[color-mix(in_srgb,var(--primary)_35%,transparent)]" style={{ width: pct(left) + '%' }} />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Figure label="আয়" value={money(d.income)} />
+                <Figure label="আয়" value={money(d.received)} />
                 <Figure label="সঞ্চয়" value={money(savedPlan)} dot="var(--success)" />
                 <Figure label="খরচ" value={money(d.actual)} dot="color-mix(in srgb, var(--muted-foreground) 60%, transparent)" />
                 <Figure label={d.isCurrent ? 'বাকি' : 'থাকল'} value={money(left)} dot="color-mix(in srgb, var(--primary) 35%, transparent)" bad={left < 0} />
@@ -119,7 +119,7 @@ export function ReviewView({ m, d, onCloseMonth, onLoans }: { m: Month; d: Deriv
           <div className="grid gap-4">
             {CATEGORIES.map((c) => {
               const cat = d.perCategory[c.key];
-              const over = cat.actual - cat.planned;
+              const over = -cat.left;
               return (
                 <div key={c.key} style={{ '--tint': c.tint } as CSSProperties}>
                   <div className="flex items-baseline justify-between gap-2">

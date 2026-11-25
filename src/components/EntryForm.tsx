@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/NumberInput';
 import { addDaysISO, pad, todayISO, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay } from '@/lib/format';
-import { CATEGORIES, LOAN_SOURCES, loanBook, loanName, repaymentFor, savingsHeld, type CatKey, type Derived, type LoanSource, type LogEntry, type Month } from '@/lib/model';
+import { CATEGORIES, LOAN_SOURCES, loanBook, loanName, repaymentFor, type CatKey, type Derived, type LoanSource, type LogEntry, type Month } from '@/lib/model';
 import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
@@ -158,7 +158,7 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
   const showName = pickValue === NEW;
   const tint = CATEGORIES.find((c) => c.key === cat)!.tint;
   const own = entry && entry.cat === cat ? entry.amount : 0;
-  const left = d.perCategory[cat].planned - d.perCategory[cat].actual + own;
+  const left = d.perCategory[cat].left + own;
   const amt = amount ?? 0;
 
   function submit(e: FormEvent) {
@@ -293,7 +293,6 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
 function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
   const { state, dispatch } = useStore();
   const range = useDateRange(d);
-  const m = state.months[state.activeMonth];
   const [amount, setAmount] = useState<number | null>(null);
   const [name, setName] = useState('');
   const [from, setFrom] = useState<LoanSource>('spend');
@@ -359,7 +358,7 @@ function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
           <p className="mt-2 text-xs text-muted-foreground">
             {from === 'spend'
               ? 'খরচের টাকা বাকি থাকবে ' + money(d.remaining - amt) + '। সঞ্চয় একই থাকবে।'
-              : 'সঞ্চয় হবে ' + money(Math.max(0, savingsHeld(m) - amt)) + '। খরচের টাকা একই থাকবে।'}
+              : 'সঞ্চয় হবে ' + money(Math.max(0, d.savingsHeld - amt)) + '। খরচের টাকা একই থাকবে।'}
           </p>
         )}
       </fieldset>

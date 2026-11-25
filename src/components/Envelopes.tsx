@@ -10,7 +10,7 @@ export function Envelopes({ d, onLoans }: { d: Derived; onLoans?: () => void }) 
     <div className="grid gap-x-6 sm:grid-cols-2">
       {CATEGORIES.map((c) => {
         const cat = d.perCategory[c.key];
-        const left = cat.planned - cat.actual;
+        const left = cat.left;
         const over = left < 0;
         return (
           <div key={c.key} className="flex items-center gap-3 border-b py-3.5 last:border-b-0 sm:nth-last-2:border-b-0" style={{ '--tint': c.tint } as CSSProperties}>

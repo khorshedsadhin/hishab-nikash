@@ -49,8 +49,8 @@ describe('derive', () => {
     expect(d.remaining).toBe(11500);
     expect(d.committedLeft).toBe(1500);
     expect(d.safeRemaining).toBe(10000);
-    expect(d.perCategory.needs).toEqual({ planned: 2500, repeating: 2500, actual: 1200, committed: 1500, unlinked: 200 });
-    expect(d.perCategory.wants).toEqual({ planned: 1000, repeating: 0, actual: 300, committed: 0, unlinked: 300 });
+    expect(d.perCategory.needs).toEqual({ planned: 2500, repeating: 2500, actual: 1200, committed: 1500, unlinked: 200, left: 1300 });
+    expect(d.perCategory.wants).toEqual({ planned: 1000, repeating: 0, actual: 300, committed: 0, unlinked: 300, left: 700 });
     expect(d.daysLeft).toBe(16);
     expect(d.expectedByNow).toBe(6500);
     expect(d.week).toEqual({
@@ -112,6 +112,48 @@ describe('derive', () => {
     expect(d.isFuture).toBe(true);
     expect(d.daysLeft).toBe(31);
     expect(headline(d)).toBe('মাস এখনো শুরু হয়নি।');
+  });
+});
+
+describe('review figures', () => {
+  function month(): Month {
+    const m = september();
+    m.incomes.push({ id: 'X', name: 'expected', amount: 4000, date: null, repeat: false });
+    m.loans = [
+      { id: 'L1', date: '2026-09-10', name: 'a', amount: 500, from: 'spend' },
+      { id: 'L2', date: '2026-09-11', name: 'b', amount: 300, from: 'savings' }
+    ];
+    return m;
+  }
+
+  it('splits income into received and expected', () => {
+    const d = derive(month(), '2026-09');
+    expect(d.received).toBe(15000);
+    expect(d.expected).toBe(4000);
+  });
+
+  it('holds the savings target minus savings loans until saved is written', () => {
+    const m = month();
+    expect(derive(m, '2026-09')).toMatchObject({ savingsHeld: 1700, savedOrHeld: 1700 });
+    m.saved = 1000;
+    expect(derive(m, '2026-09')).toMatchObject({ savingsHeld: 1700, savedOrHeld: 1000 });
+  });
+
+  it('counts only received income in what was left after saving', () => {
+    const m = month();
+    // 15000 received - 1700 held - 1500 spent - 800 lent.
+    expect(derive(m, '2026-09').leftAfterSaved).toBe(11000);
+    m.saved = 2000;
+    expect(derive(m, '2026-09').leftAfterSaved).toBe(10700);
+  });
+
+  it('matches the close book balance for an ended month', () => {
+    const m = month();
+    m.saved = 2000;
+    const state: State = { activeMonth: '2026-08', months: { '2026-08': m } };
+    const aug: Month = JSON.parse(JSON.stringify(m).split('2026-09').join('2026-08'));
+    state.months = { '2026-08': aug };
+    expect(deriveMonth(state, '2026-08').leftAfterSaved).toBe(bookBalance(state, '2026-08', 2000));
   });
 });
 

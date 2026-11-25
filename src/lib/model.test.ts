@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { money } from './format';
 import {
-  blankMonth, bookBalance, canClose, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
-  isBlank, loanBook, loanName, loanRows, loanSourceLabel, loanTitle, migrate, repaymentFor, reconRows, savingsHeld, streak, tone, type Month, type State
+  blankMonth, bookBalance, canClose, closePlan, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
+  isBlank, loanBook, loanName, loanRows, loanSourceLabel, loanTitle, migrate, repaymentFor, reconRows, savingsHeld, streak, tone, type CloseInput, type Month, type State
 } from './model';
 import { reducer } from '@/state/store';
 
@@ -387,12 +387,62 @@ describe('close', () => {
     expect(canClose(state, '2026-08')).toBe(false);
   });
 
+  const input = (over: Partial<CloseInput> = {}): CloseInput => ({
+    saved: 2000, cash: null, fill: true, extra: 0, nextSavingsTarget: 2500, ...over
+  });
+
+  it('plans a close from the counted cash', () => {
+    const plan = closePlan(withAugust(), '2026-08', input({ cash: 1200 }));
+    expect(plan).toMatchObject({
+      at: '2026-08-31', book: 1500, gap: 300, fillGap: 300, extraSaved: 0, saved: 2000, forward: 1200, spent: 7300
+    });
+  });
+
+  it('carries the book balance when cash is not counted', () => {
+    const plan = closePlan(withAugust(), '2026-08', input());
+    expect(plan).toMatchObject({ gap: 0, fillGap: 0, forward: 1500 });
+  });
+
+  it('leaves the gap unwritten when asked', () => {
+    expect(closePlan(withAugust(), '2026-08', input({ cash: 1200, fill: false })).fillGap).toBe(0);
+  });
+
+  it('moves part of the counted cash to savings, never more than was counted', () => {
+    expect(closePlan(withAugust(), '2026-08', input({ cash: 1200, extra: 400 }))).toMatchObject({
+      extraSaved: 400, saved: 2400, forward: 800
+    });
+    expect(closePlan(withAugust(), '2026-08', input({ cash: 1200, extra: 5000 })).forward).toBe(0);
+    expect(closePlan(withAugust(), '2026-08', input({ extra: 400 })).extraSaved).toBe(0);
+  });
+
+  it('previews the next month from its repeating plan', () => {
+    const state = withAugust();
+    state.months['2026-08'].budget.needs = [
+      { id: 'A', name: 'a', amount: 3000, repeat: true },
+      { id: 'B', name: 'b', amount: 900, repeat: false }
+    ];
+    expect(closePlan(state, '2026-08', input()).next).toEqual({
+      key: '2026-09', income: 10000, committed: 3000, savingsTarget: 2500, spendable: 9000
+    });
+    const sep = september();
+    sep.locked = true;
+    state.months['2026-09'] = sep;
+    expect(closePlan(state, '2026-08', input()).next).toEqual({
+      key: '2026-09', income: 15000, committed: 2500, savingsTarget: 2000, spendable: 14500
+    });
+  });
+
+  it('lists the categories that went over plan', () => {
+    const state = withAugust();
+    state.months['2026-08'].budget.needs = [{ id: 'A', name: 'a', amount: 6000, repeat: false }];
+    state.months['2026-08'].log.push({ id: 'y', date: '2026-08-11', name: '', cat: 'wants', amount: 100, lineId: null });
+    expect(closePlan(state, '2026-08', input()).overs).toEqual([{ key: 'needs', over: 1000 }]);
+  });
+
   it('closes a month and starts the next from the counted cash', () => {
     const state = withAugust();
     expect(bookBalance(state, '2026-08', 2000)).toBe(1500);
-    const next = reducer(state, {
-      type: 'closeMonth', month: '2026-08', saved: 2000, cash: 1200, forward: 1200, fillGap: 300, reflection: 'note', nextSavingsTarget: 2500
-    });
+    const next = reducer(state, { type: 'closeMonth', month: '2026-08', input: input({ cash: 1200 }), reflection: 'note' });
     const aug = next.months['2026-08'];
     expect(aug).toMatchObject({ saved: 2000, reflection: 'note', closed: true, locked: true });
     expect(aug.log.at(-1)).toMatchObject({ date: '2026-08-31', name: 'অজানা খরচ', amount: 300 });
@@ -403,14 +453,19 @@ describe('close', () => {
     expect(next.months['2026-09'].incomes).toMatchObject([{ name: 'income-a', date: null }]);
   });
 
+  it('records extra savings and counts the cash left after them', () => {
+    const next = reducer(withAugust(), { type: 'closeMonth', month: '2026-08', input: input({ cash: 1500, extra: 500 }), reflection: '' });
+    expect(next.months['2026-08'].saved).toBe(2500);
+    expect(next.months['2026-08'].checks).toMatchObject([{ amount: 1000 }]);
+    expect(next.months['2026-09'].cashStart).toBe(1000);
+  });
+
   it('keeps a locked next month plan and carries the ledger figure when cash is not counted', () => {
     const state = withAugust();
     const sep = september();
     sep.locked = true;
     state.months['2026-09'] = sep;
-    const next = reducer(state, {
-      type: 'closeMonth', month: '2026-08', saved: 2000, cash: null, forward: 1500, fillGap: 0, reflection: '', nextSavingsTarget: 9
-    });
+    const next = reducer(state, { type: 'closeMonth', month: '2026-08', input: input({ nextSavingsTarget: 9 }), reflection: '' });
     expect(next.months['2026-09'].savingsTarget).toBe(2000);
     expect(next.months['2026-09'].cashStart).toBe(1500);
     expect(next.months['2026-08'].checks).toEqual([]);

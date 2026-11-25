@@ -1,4 +1,4 @@
-import { addDaysISO, daysApart, daysInMonth, pad, prevMonthKey, saturdayOf, todayISO, uid } from './dates';
+import { addDaysISO, daysApart, daysInMonth, nextMonthKey, pad, prevMonthKey, saturdayOf, todayISO, uid } from './dates';
 import { dayLabel, money, toBn } from './format';
 
 export type CatKey = 'needs' | 'wants' | 'giving' | 'unexpected';
@@ -564,6 +564,81 @@ export function bookBalance(state: State, monthKey: string, saved: number): numb
   const m = state.months[monthKey];
   const at = closeDate(monthKey);
   return deriveMonth(state, monthKey).carry + receivedUpto(m, at) - spentUpto(m, at) - saved;
+}
+
+/* Sum of the plan lines that repeat each month. */
+export function repeatingPlanned(m: Month): number {
+  return CATEGORIES.reduce((s, c) => s + (m.budget[c.key] || []).reduce((t, l) => t + (l.repeat ? l.amount : 0), 0), 0);
+}
+
+/* What the person answers in the close dialog. */
+export interface CloseInput {
+  /* Moved to savings during the month. */
+  saved: number;
+  /* Cash counted on the close date, after `saved` left; null when not counted. */
+  cash: number | null;
+  /* Write a positive gap down as one unexpected spend. */
+  fill: boolean;
+  /* Part of the counted cash moved to savings at the close. */
+  extra: number;
+  /* Used only when the next month's plan is not locked. */
+  nextSavingsTarget: number;
+}
+
+export interface ClosePlan {
+  at: string;
+  book: number;
+  gap: number;
+  fillGap: number;
+  extraSaved: number;
+  /* Everything saved this month, the extra included. */
+  saved: number;
+  forward: number;
+  /* Spending including the filled gap. */
+  spent: number;
+  overs: { key: CatKey; over: number }[];
+  next: { key: string; income: number; committed: number; savingsTarget: number; spendable: number };
+}
+
+/* Every figure of a month-end close, from the person's answers. */
+export function closePlan(state: State, monthKey: string, input: CloseInput): ClosePlan {
+  const m = state.months[monthKey];
+  const d = deriveMonth(state, monthKey);
+  const book = bookBalance(state, monthKey, input.saved);
+  const counted = input.cash != null;
+  const gap = counted ? book - input.cash! : 0;
+  const fillGap = counted && gap > 0 && input.fill ? gap : 0;
+  const extraSaved = counted ? Math.max(0, Math.min(input.extra, input.cash!)) : 0;
+  const forward = counted ? input.cash! - extraSaved : book;
+
+  const nextKey = nextMonthKey(monthKey);
+  const existing = state.months[nextKey];
+  const next = existing ?? makeNewMonth(m);
+  const savingsTarget = existing && existing.locked ? existing.savingsTarget : input.nextSavingsTarget;
+  const income = incomeTotal(next);
+
+  return {
+    at: closeDate(monthKey),
+    book,
+    gap,
+    fillGap,
+    extraSaved,
+    saved: input.saved + extraSaved,
+    forward,
+    spent: d.actual + fillGap,
+    overs: CATEGORIES
+      .map((c) => ({ key: c.key, over: -d.perCategory[c.key].left, planned: d.perCategory[c.key].planned }))
+      .filter((x) => x.planned > 0 && x.over > 0)
+      .map(({ key, over }) => ({ key, over })),
+    next: { key: nextKey, income, committed: repeatingPlanned(next), savingsTarget, spendable: income + forward - savingsTarget }
+  };
+}
+
+/* Where the close dialog's answers start. */
+export function closeDefaults(state: State, monthKey: string): { saved: number; nextSavingsTarget: number } {
+  const m = state.months[monthKey];
+  const next = state.months[nextMonthKey(monthKey)];
+  return { saved: m.saved ?? savingsHeld(m), nextSavingsTarget: next ? next.savingsTarget : m.savingsTarget };
 }
 
 /* A month can be closed once it has ended, or in its last three days. */

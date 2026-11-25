@@ -4,11 +4,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { nextMonthKey } from '@/lib/dates';
 import { dayLabel, money, monthLabel, toBn } from '@/lib/format';
-import {
-  bookBalance, CATEGORIES, catLabel, closeDate, deriveMonth, incomeTotal, savingsHeld, type Month
-} from '@/lib/model';
+import { catLabel, closeDefaults, closePlan, deriveMonth } from '@/lib/model';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/state/store';
 import { NumberInput } from './NumberInput';
@@ -30,42 +27,24 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
   const { state, dispatch } = useStore();
   const m = state.months[monthKey];
   const d = deriveMonth(state, monthKey);
-  const nextKey = nextMonthKey(monthKey);
-  const next: Month | undefined = state.months[nextKey];
+  const defaults = closeDefaults(state, monthKey);
 
   const [step, setStep] = useState(0);
-  const [saved, setSaved] = useState<number>(m.saved ?? savingsHeld(m));
+  const [saved, setSaved] = useState<number>(defaults.saved);
   const [cash, setCash] = useState<number | null>(null);
   const [fill, setFill] = useState(true);
   const [extra, setExtra] = useState(0);
   const [reflection, setReflection] = useState(m.reflection);
-  const [nextTarget, setNextTarget] = useState<number>(next && next.locked ? next.savingsTarget : (next?.savingsTarget ?? m.savingsTarget));
+  const [nextTarget, setNextTarget] = useState<number>(defaults.nextSavingsTarget);
 
-  const at = closeDate(monthKey);
-  const book = bookBalance(state, monthKey, saved);
-  const gap = cash == null ? 0 : book - cash;
-  const fillGap = cash != null && gap > 0 && fill ? gap : 0;
-  const extraSafe = cash == null ? 0 : Math.max(0, Math.min(extra, cash));
-  const forward = cash == null ? book : cash - extraSafe;
-  const nextIncome = next ? incomeTotal(next) : m.incomes.filter((x) => x.repeat).reduce((s, x) => s + x.amount, 0);
-  const nextCommitted = next
-    ? CATEGORIES.reduce((s, c) => s + next.budget[c.key].filter((l) => l.repeat).reduce((t, l) => t + l.amount, 0), 0)
-    : CATEGORIES.reduce((s, c) => s + m.budget[c.key].filter((l) => l.repeat).reduce((t, l) => t + l.amount, 0), 0);
-  const overs = CATEGORIES
-    .map((c) => ({ key: c.key, over: d.perCategory[c.key].actual - d.perCategory[c.key].planned, planned: d.perCategory[c.key].planned }))
-    .filter((x) => x.planned > 0 && x.over > 0);
+  const input = { saved, cash, fill, extra, nextSavingsTarget: nextTarget };
+  const plan = closePlan(state, monthKey, input);
+  const { at, book, gap, forward, overs } = plan;
+  const nextKey = plan.next.key;
+  const next = state.months[nextKey];
 
   function finish() {
-    dispatch({
-      type: 'closeMonth',
-      month: monthKey,
-      saved: saved + extraSafe,
-      cash: cash == null ? null : forward,
-      forward,
-      fillGap,
-      reflection,
-      nextSavingsTarget: nextTarget
-    });
+    dispatch({ type: 'closeMonth', month: monthKey, input, reflection });
     toast.success(monthLabel(monthKey) + ' বন্ধ হয়েছে। ' + monthLabel(nextKey) + ' শুরু।');
     onDone();
   }
@@ -94,7 +73,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
             onValue={(v) => setSaved(v ?? 0)}
             className="h-12 rounded-xl font-fig text-xl"
           />
-          <p className="text-sm text-muted-foreground">লক্ষ্য ছিল {money(m.savingsTarget)}{savingsHeld(m) !== m.savingsTarget ? ', ধার দেওয়ার পর ' + money(savingsHeld(m)) : ''}। যা সত্যি আলাদা করেছ সেটাই লেখো।</p>
+          <p className="text-sm text-muted-foreground">লক্ষ্য ছিল {money(m.savingsTarget)}{d.savingsHeld !== m.savingsTarget ? ', ধার দেওয়ার পর ' + money(d.savingsHeld) : ''}। যা সত্যি আলাদা করেছ সেটাই লেখো।</p>
         </div>
       )}
 
@@ -164,8 +143,8 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
         <div className="grid gap-4">
           <div className="grid grid-cols-2 gap-2">
             <Stat label="আয়" value={money(d.received)} />
-            <Stat label="সঞ্চয়" value={money(saved + extraSafe)} tone={saved + extraSafe >= savingsHeld(m) ? 'good' : 'warn'} />
-            <Stat label="খরচ" value={money(d.actual + fillGap)} />
+            <Stat label="সঞ্চয়" value={money(plan.saved)} tone={plan.saved >= d.savingsHeld ? 'good' : 'warn'} />
+            <Stat label="খরচ" value={money(plan.spent)} />
             <Stat label="পরের মাসে যাবে" value={money(forward)} />
           </div>
           {overs.length > 0 ? (
@@ -196,7 +175,7 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
       {step === 3 && (
         <div className="grid gap-3 text-sm">
           <p className="text-[15px] font-medium">{monthLabel(nextKey)} যেভাবে শুরু হবে</p>
-          <Row label={next ? 'প্ল্যানে ধরা আয়' : 'প্রতি মাসের আয়'} value={money(nextIncome)} />
+          <Row label={next ? 'প্ল্যানে ধরা আয়' : 'প্রতি মাসের আয়'} value={money(plan.next.income)} />
           <Row label="আগের মাস থেকে" value={money(forward)} />
           <label className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">সঞ্চয়ের লক্ষ্য</span>
@@ -210,11 +189,11 @@ function Steps({ monthKey, onDone }: { monthKey: string; onDone: () => void }) {
           </label>
           <div className="flex items-baseline justify-between border-t pt-3">
             <span className="font-medium">খরচযোগ্য</span>
-            <span className="font-fig text-2xl font-semibold text-primary">{money(nextIncome + forward - nextTarget)}</span>
+            <span className="font-fig text-2xl font-semibold text-primary">{money(plan.next.spendable)}</span>
           </div>
           <p className="text-muted-foreground">
-            এর মধ্যে {money(nextCommitted)} প্রতি মাসের বাঁধা খরচ, প্ল্যানে আগে থেকেই থাকবে।
-            {nextIncome === 0 && ' আয় এখনো কিছু ধরা নেই, প্ল্যানে গিয়ে আয় যোগ করো।'}
+            এর মধ্যে {money(plan.next.committed)} প্রতি মাসের বাঁধা খরচ, প্ল্যানে আগে থেকেই থাকবে।
+            {plan.next.income === 0 && ' আয় এখনো কিছু ধরা নেই, প্ল্যানে গিয়ে আয় যোগ করো।'}
           </p>
         </div>
       )}

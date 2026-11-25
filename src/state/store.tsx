@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
-  blankMonth, closeDate, expectedAt, makeNewMonth, migrate,
-  type Check, type Income, type Line, type Loan, type LogEntry, type Month, type State
+  blankMonth, closePlan, expectedAt, makeNewMonth, migrate,
+  type Check, type CloseInput, type Income, type Line, type Loan, type LogEntry, type Month, type State
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
@@ -25,18 +25,7 @@ export type Action =
   | { type: 'toggleIncomeRepeat'; id: string }
   | { type: 'deleteIncome'; id: string }
   | { type: 'restoreIncome'; month: string; income: Income; index: number }
-  | {
-      type: 'closeMonth';
-      month: string;
-      saved: number;
-      /* Cash counted on the close date, after `saved` left; null when not counted. */
-      cash: number | null;
-      /* What the next month starts with: the counted cash, or the ledger's figure. */
-      forward: number;
-      fillGap: number;
-      reflection: string;
-      nextSavingsTarget: number;
-    }
+  | { type: 'closeMonth'; month: string; input: CloseInput; reflection: string }
   | { type: 'reopenMonth' }
   | { type: 'setSavingsTarget'; value: number }
   | { type: 'setCashStart'; value: number | null }
@@ -242,24 +231,25 @@ export function reducer(prev: State, action: Action): State {
     case 'closeMonth': {
       const target = state.months[action.month];
       if (!target) return prev;
-      const at = closeDate(action.month);
-      target.saved = action.saved;
+      const plan = closePlan(prev, action.month, action.input);
+      const at = plan.at;
+      target.saved = plan.saved;
       target.reflection = action.reflection;
-      if (action.fillGap > 0) {
-        target.log.push({ id: uid(), date: at, name: 'অজানা খরচ', cat: 'unexpected', amount: action.fillGap, lineId: null });
+      if (plan.fillGap > 0) {
+        target.log.push({ id: uid(), date: at, name: 'অজানা খরচ', cat: 'unexpected', amount: plan.fillGap, lineId: null });
         markLogged(target, at);
       }
-      if (action.cash != null) {
+      if (action.input.cash != null) {
         target.checks = (target.checks || []).filter((c) => c.date !== at);
-        target.checks.push({ id: uid(), date: at, amount: action.cash });
+        target.checks.push({ id: uid(), date: at, amount: plan.forward });
       }
       target.closed = true;
       target.locked = true;
-      const nextKey = nextMonthKey(action.month);
+      const nextKey = plan.next.key;
       if (!state.months[nextKey]) state.months[nextKey] = makeNewMonth(target);
       const next = state.months[nextKey];
-      next.cashStart = action.forward;
-      if (!next.locked) next.savingsTarget = action.nextSavingsTarget;
+      next.cashStart = plan.forward;
+      next.savingsTarget = plan.next.savingsTarget;
       state.activeMonth = nextKey;
       break;
     }

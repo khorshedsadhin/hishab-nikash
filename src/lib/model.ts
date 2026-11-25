@@ -234,41 +234,51 @@ export function repaymentFor(row: LoanRow): Repayment {
   return { name: 'ধার ফেরত, ' + loanName(row.loan), amount: row.left, loanId: row.loan.id };
 }
 
-/* Brings older saves up to the current Month shape by filling every missing field with its default. */
-export function migrate(s: any): State {
-  Object.keys(s.months).forEach((k) => {
-    const m = s.months[k];
-    if (!m.budget) m.budget = {};
-    /* The old learning category was dropped; its spending counts as a want. */
-    if (Array.isArray(m.budget.culture)) {
-      m.budget.wants = (m.budget.wants || []).concat(m.budget.culture);
-      delete m.budget.culture;
-    }
-    CATEGORIES.forEach((c) => {
-      if (!Array.isArray(m.budget[c.key])) m.budget[c.key] = [];
-    });
-    if (!Array.isArray(m.log)) m.log = [];
-    if (!Array.isArray(m.loans)) m.loans = [];
-    if (typeof m.reflection !== 'string') m.reflection = '';
-    if (typeof m.saved !== 'number') m.saved = null;
-    if (typeof m.cashStart !== 'number') m.cashStart = null;
-    if (!Array.isArray(m.checks)) m.checks = [];
-    if (!Array.isArray(m.loggedDays)) m.loggedDays = [];
-    if (typeof m.locked !== 'boolean') m.locked = false;
-    if (typeof m.closed !== 'boolean') m.closed = false;
-    /* A single income number becomes one income that arrived on the 1st, as it was assumed before. */
-    if (!Array.isArray(m.incomes)) {
-      const amount = typeof m.income === 'number' ? m.income : 0;
-      m.incomes = amount > 0 ? [{ id: 'income-' + k, name: 'আয়', amount, date: k + '-01', repeat: true }] : [];
-    }
-    delete m.income;
-    m.log.forEach((e: LogEntry) => {
-      if (e.lineId === undefined) e.lineId = null;
-      if (e.cat === 'culture') e.cat = 'wants';
-      if (m.loggedDays.indexOf(e.date) < 0) m.loggedDays.push(e.date);
-    });
+/* Brings an older month (key `k`) up to the current Month shape by filling every missing field with its default. */
+export function migrateMonth(k: string, m: any): Month {
+  if (!m.budget) m.budget = {};
+  /* The old learning category was dropped; its spending counts as a want. */
+  if (Array.isArray(m.budget.culture)) {
+    m.budget.wants = (m.budget.wants || []).concat(m.budget.culture);
+    delete m.budget.culture;
+  }
+  CATEGORIES.forEach((c) => {
+    if (!Array.isArray(m.budget[c.key])) m.budget[c.key] = [];
   });
+  if (!Array.isArray(m.log)) m.log = [];
+  if (!Array.isArray(m.loans)) m.loans = [];
+  if (typeof m.reflection !== 'string') m.reflection = '';
+  if (typeof m.saved !== 'number') m.saved = null;
+  if (typeof m.cashStart !== 'number') m.cashStart = null;
+  if (!Array.isArray(m.checks)) m.checks = [];
+  if (!Array.isArray(m.loggedDays)) m.loggedDays = [];
+  if (typeof m.locked !== 'boolean') m.locked = false;
+  if (typeof m.closed !== 'boolean') m.closed = false;
+  /* A single income number becomes one income that arrived on the 1st, as it was assumed before. */
+  if (!Array.isArray(m.incomes)) {
+    const amount = typeof m.income === 'number' ? m.income : 0;
+    m.incomes = amount > 0 ? [{ id: 'income-' + k, name: 'আয়', amount, date: k + '-01', repeat: true }] : [];
+  }
+  delete m.income;
+  m.log.forEach((e: LogEntry) => {
+    if (e.lineId === undefined) e.lineId = null;
+    if (e.cat === 'culture') e.cat = 'wants';
+    if (m.loggedDays.indexOf(e.date) < 0) m.loggedDays.push(e.date);
+  });
+  return m as Month;
+}
+
+/* Brings an older save up to the current shape, month by month. */
+export function migrate(s: any): State {
+  Object.keys(s.months).forEach((k) => migrateMonth(k, s.months[k]));
   return s as State;
+}
+
+/* The one way outside state (a save or a backup) enters the app. Null when it is not a Hishab state. */
+export function ingestState(raw: unknown): State | null {
+  const s = raw as any;
+  if (!s || typeof s !== 'object' || !s.months || typeof s.months !== 'object' || typeof s.activeMonth !== 'string') return null;
+  return migrate(s);
 }
 
 /* Reconcile: checks the ledger against counted cash. */

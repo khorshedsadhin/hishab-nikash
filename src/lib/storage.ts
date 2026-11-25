@@ -1,5 +1,5 @@
 import { todayISO } from './dates';
-import { migrate, seed, type State } from './model';
+import { ingestState, seed, type State } from './model';
 
 const STORAGE_KEY = 'hishab';
 
@@ -7,9 +7,7 @@ export function load(): State {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return seed();
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.months || !parsed.activeMonth) return seed();
-    return migrate(parsed);
+    return ingestState(JSON.parse(raw)) || seed();
   } catch {
     return seed();
   }
@@ -39,7 +37,7 @@ export function exportData(state: State) {
   URL.revokeObjectURL(url);
 }
 
-/* Returns the parsed backup, or the Bangla error message to show. */
+/* Returns the ingested backup, or the Bangla error message to show. */
 export function parseImport(text: string): { state: State } | { error: string } {
   let parsed;
   try {
@@ -47,8 +45,12 @@ export function parseImport(text: string): { state: State } | { error: string } 
   } catch {
     return { error: 'ফাইলটা পড়া গেল না, এটা সঠিক JSON না।' };
   }
-  if (!parsed || typeof parsed.months !== 'object' || typeof parsed.activeMonth !== 'string') {
-    return { error: 'ফাইলের গঠন মিলছে না, এটা হিসাবের ব্যাকআপ বলে মনে হচ্ছে না।' };
+  let state: State | null = null;
+  try {
+    state = ingestState(parsed);
+  } catch {
+    /* a month that is not an object */
   }
-  return { state: parsed };
+  if (!state) return { error: 'ফাইলের গঠন মিলছে না, এটা হিসাবের ব্যাকআপ বলে মনে হচ্ছে না।' };
+  return { state };
 }

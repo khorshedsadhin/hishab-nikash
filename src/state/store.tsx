@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
-  applyInverse, blankMonth, canEdit, closePlan, expectedAt, inverseOf, makeNewMonth, migrate,
+  applyInverse, blankMonth, canEdit, closePlan, expectedAt, inverseOf, makeNewMonth,
   type EditKind, type CloseInput, type Loan, type Month, type State, type UndoStep
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
@@ -111,7 +111,8 @@ function markLogged(m: Month, date: string) {
 }
 
 export function reducer(prev: State, action: Action): State {
-  if (action.type === 'importState') return migrate(action.state);
+  /* Imported state is already ingested by parseImport. */
+  if (action.type === 'importState') return action.state;
   /* Undo only puts back an earlier state, so the month policy does not apply. */
   if (action.type === 'undo') return applyInverse(prev, action.steps);
   if (action.type === 'mergeRemote') {

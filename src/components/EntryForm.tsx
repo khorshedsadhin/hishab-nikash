@@ -126,7 +126,7 @@ function DatePick({ value, onChange, start, end }: { value: string; onChange: (v
             try {
               e.currentTarget.showPicker();
             } catch {
-              /* older browsers open the picker on their own */
+              /* Older browsers open the picker on their own. */
             }
           }}
           className="absolute inset-0 cursor-pointer opacity-0"
@@ -140,7 +140,6 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
   m: Month;
   d: Derived;
   onDone?: () => void;
-  /* Set when editing an entry that is already written. */
   entry?: LogEntry;
   onDelete?: () => void;
 }) {

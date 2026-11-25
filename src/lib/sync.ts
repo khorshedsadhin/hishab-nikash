@@ -7,14 +7,14 @@ const EPOCH = '1970-01-01T00:00:00.000Z';
 interface Meta {
   username: string | null;
   lastPull: string | null;
-  /* month key -> when it was last edited locally and not yet pushed */
+  /* Month key mapped to its last local edit time, for months not yet pushed. */
   dirty: Record<string, string>;
 }
 
 export interface RemoteMonth {
   month: string;
   updatedAt: string;
-  /* null when the month was deleted */
+  /* Null when the month was deleted. */
   value: Month | null;
 }
 

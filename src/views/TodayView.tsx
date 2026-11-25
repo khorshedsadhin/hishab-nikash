@@ -119,7 +119,6 @@ export function TodayView({ m, d, mode, onMode, onCloseMonth, onView, onAdd }: {
           </Panel>
         </div>
 
-        {/* The form stays in view while the left column scrolls. */}
         <div className="hidden content-start lg:sticky lg:top-8 lg:grid lg:self-start">
           <Panel>
             <PanelTitle>লেখো</PanelTitle>

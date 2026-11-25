@@ -140,7 +140,7 @@ export function receivedUpto(m: Month, date: string): number {
   return (m.incomes || []).reduce((s, x) => s + (x.date != null && x.date <= date ? (x.amount || 0) : 0), 0);
 }
 
-/* --- loans: money lent out, paid back later as income --- */
+/* Loans: money lent out and paid back later as income. */
 
 export function lentFrom(m: Month, from: LoanSource): number {
   return (m.loans || []).reduce((s, l) => s + (l.from === from ? l.amount : 0), 0);
@@ -186,7 +186,7 @@ export function loanRows(state: State): LoanRow[] {
   return rows.sort((a, b) => (a.loan.date < b.loan.date ? -1 : a.loan.date > b.loan.date ? 1 : 0));
 }
 
-/* Old saves predate the reconcile fields, the per-line spend links and the income list. */
+/* Brings older saves up to the current Month shape by filling every missing field with its default. */
 export function migrate(s: any): State {
   Object.keys(s.months).forEach((k) => {
     const m = s.months[k];
@@ -223,7 +223,7 @@ export function migrate(s: any): State {
   return s as State;
 }
 
-/* --- reconcile: is the ledger telling the truth? --- */
+/* Reconcile: checks the ledger against counted cash. */
 
 /* Cash out by `date`: spending plus everything lent. */
 function spentUpto(m: Month, date: string): number {
@@ -264,7 +264,7 @@ export function savedTotal(state: State): number {
   return Object.keys(state.months).reduce((s, k) => s + (state.months[k].saved || 0), 0);
 }
 
-/* --- the money model --- */
+/* Derived figures for a month. */
 
 export interface CategoryTotals {
   planned: number;
@@ -382,7 +382,6 @@ export function derive(m: Month, monthKey: string, carry = 0): Derived {
     lines.forEach((l) => {
       catPlanned += l.amount;
       catLinked += lineActual[l.id] || 0;
-      /* Only repeating lines are obligations — a one-off want is not money you owe. */
       if (l.repeat) {
         catRepeating += l.amount;
         catCommitted += Math.max(0, l.amount - (lineActual[l.id] || 0));
@@ -475,7 +474,7 @@ export function deriveMonth(state: State, monthKey: string): Derived {
   return derive(m, monthKey, m.cashStart ?? carryInto(state, monthKey));
 }
 
-/* --- month-end close --- */
+/* Month-end close. */
 
 export function lastDayOf(monthKey: string): string {
   return monthKey + '-' + pad(daysInMonth(monthKey));
@@ -531,7 +530,7 @@ export function headline(d: Derived): string {
   return 'ঠিক পথে আছো।';
 }
 
-/* --- logging streak: a blank day must not read as a zero-spend day --- */
+/* Logging streak: a blank day must not read as a zero-spend day. */
 
 export function lastLoggedDate(state: State): string {
   let best = '';

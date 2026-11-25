@@ -182,7 +182,7 @@ export function reducer(prev: State, action: Action): State {
       target.loans.splice(action.index, 0, action.loan);
       break;
     }
-    /* The lock holds income too; checked on the month the income lands in. */
+    /* New income is checked against the lock of the month it lands in, not the active month. */
     case 'addIncome': {
       const target = action.date ? state.months[action.date.slice(0, 7)] : m;
       if (!target || target.locked) return prev;

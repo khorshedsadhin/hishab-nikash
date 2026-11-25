@@ -32,7 +32,6 @@ export function MoreView({ onOpenMonth }: { onOpenMonth: () => void }) {
   return (
     <>
       <PageHeader title="আরও" />
-      {/* Columns size to their own content; the month list spans both rows on wide screens. */}
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <Panel>
           <div className="flex items-center gap-4">

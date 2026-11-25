@@ -1,30 +1,19 @@
 import { Check, Trash2 } from 'lucide-react';
 import { Panel, PanelTitle } from '@/components/Panel';
 import { dayLabel, money } from '@/lib/format';
-import { loanBook, loanName, loanSourceLabel, type Income, type LoanRow } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
+import { loanBook, loanName, loanSourceLabel, type LoanRow } from '@/lib/model';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 
 /* Every loan across all months; paying one back is done from the income form. */
 export function LoanList() {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const { open, closed: done, owed } = loanBook(state);
   const empty = open.length === 0 && done.length === 0;
 
   function remove(r: LoanRow) {
-    const index = state.months[r.month].loans.findIndex((l) => l.id === r.loan.id);
-    const repaid: { month: string; income: Income; index: number }[] = [];
-    Object.keys(state.months).forEach((month) => {
-      state.months[month].incomes.forEach((income, i) => {
-        if (income.loanId === r.loan.id) repaid.push({ month, income, index: i });
-      });
-    });
-    dispatch({ type: 'deleteLoan', id: r.loan.id });
-    undoToast('ধার মুছে ফেলা হয়েছে।', () => {
-      dispatch({ type: 'restoreLoan', month: r.month, loan: r.loan, index });
-      repaid.forEach((x) => dispatch({ type: 'restoreIncome', ...x }));
-    });
+    run({ type: 'deleteLoan', id: r.loan.id }, 'ধার মুছে ফেলা হয়েছে।');
   }
 
   return (

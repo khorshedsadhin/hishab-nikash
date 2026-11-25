@@ -5,7 +5,7 @@ import {
   blankMonth, bookBalance, canClose, canEdit, closePlan, carryInto, derive, deriveMonth, expectedAt, headline, makeNewMonth,
   isBlank, loanBook, loanName, loanRows, loanSourceLabel, loanTitle, migrate, repaymentFor, reconRows, savingsHeld, streak, tone, type CloseInput, type Month, type State
 } from './model';
-import { reducer, type Action } from '@/state/store';
+import { reducer, undoable, type Action } from '@/state/store';
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -585,58 +585,113 @@ describe('undo', () => {
       { id: 'c1', date: '2026-09-05', amount: 5000 },
       { id: 'c2', date: '2026-09-10', amount: 4000 }
     ];
-    return { activeMonth: '2026-09', months: { '2026-09': m, '2026-08': blankMonth() } };
+    m.incomes.push({ id: 'X', name: 'income-x', amount: 300, date: null, repeat: false });
+    m.loans = [{ id: 'L1', date: '2026-09-10', name: 'person-a', amount: 500, from: 'spend' }];
+    m.incomes.push({ id: 'R1', name: 'x', amount: 100, date: '2026-09-12', repeat: false, loanId: 'L1' });
+    const aug = blankMonth();
+    aug.incomes = [{ id: 'R0', name: 'x', amount: 50, date: '2026-08-30', repeat: false, loanId: 'L1' }];
+    return { activeMonth: '2026-09', months: { '2026-09': m, '2026-08': aug } };
   }
 
+  /* Runs the action through the undo path, then its undo. */
+  function roundTrip(before: State, action: Action) {
+    const plan = undoable(before, action);
+    if (!plan) throw new Error('action changed nothing');
+    expect(plan.after).not.toEqual(before);
+    return { plan, back: reducer(plan.after, plan.undo) };
+  }
+
+  const cases: [string, Action][] = [
+    ['deleteLog', { type: 'deleteLog', id: 'e2' }],
+    ['deleteLoan', { type: 'deleteLoan', id: 'L1' }],
+    ['deleteLine', { type: 'deleteLine', cat: 'needs', id: 'A' }],
+    ['deleteIncome', { type: 'deleteIncome', id: 'I' }],
+    ['deleteCheck', { type: 'deleteCheck', id: 'c1' }],
+    ['deleteMonth', { type: 'deleteMonth' }],
+    ['addSpend', { type: 'addSpend', date: '2026-09-16', cat: 'wants', amount: 20, pick: '', name: 'entry-9' }],
+    ['addSpend merged', { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: 'entry-2' }],
+    ['addIncome', { type: 'addIncome', name: 'income-n', amount: 500, date: '2026-09-15', repeat: false, toSavings: 300 }],
+    ['receiveIncome', { type: 'receiveIncome', id: 'X', date: '2026-09-15' }],
+    ['addLoan', { type: 'addLoan', loan: { id: 'L2', date: '2026-09-11', name: 'person-b', amount: 200, from: 'savings' } }]
+  ];
+
+  it.each(cases)('takes back %s exactly', (_name, action) => {
+    const before = state();
+    expect(roundTrip(before, action).back).toEqual(before);
+  });
+
   it('puts a deleted entry back in place', () => {
-    const before = state();
-    const entry = before.months['2026-09'].log[1];
-    const gone = reducer(before, { type: 'deleteLog', id: entry.id });
-    expect(reducer(gone, { type: 'restoreLog', month: '2026-09', entry, index: 1 })).toEqual(before);
+    const { back } = roundTrip(state(), { type: 'deleteLog', id: 'e2' });
+    expect(back.months['2026-09'].log.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
   });
 
-  it('puts a deleted check back in place', () => {
-    const before = state();
-    const check = before.months['2026-09'].checks[0];
-    const gone = reducer(before, { type: 'deleteCheck', id: check.id });
-    expect(reducer(gone, { type: 'restoreCheck', month: '2026-09', check, index: 0 })).toEqual(before);
-  });
-
-  it('puts a deleted income back in place', () => {
-    const before = state();
-    const income = before.months['2026-09'].incomes[0];
-    const gone = reducer(before, { type: 'deleteIncome', id: income.id });
-    expect(reducer(gone, { type: 'restoreIncome', month: '2026-09', income, index: 0 })).toEqual(before);
-  });
-
-  it('puts a deleted plan line back in place', () => {
-    const before = state();
-    const line = before.months['2026-09'].budget.needs[0];
-    const gone = reducer(before, { type: 'deleteLine', cat: 'needs', id: line.id });
-    expect(reducer(gone, { type: 'restoreLine', month: '2026-09', cat: 'needs', line, index: 0 })).toEqual(before);
-  });
-
-  it('puts a deleted month back and opens it', () => {
-    const before = state();
-    const gone = reducer(before, { type: 'deleteMonth' });
-    expect(gone.activeMonth).toBe('2026-08');
-    expect(reducer(gone, { type: 'restoreMonth', key: '2026-09', month: before.months['2026-09'] })).toEqual(before);
+  it('brings a deleted month back and opens it', () => {
+    const { plan, back } = roundTrip(state(), { type: 'deleteMonth' });
+    expect(plan.after.activeMonth).toBe('2026-08');
+    expect(back.activeMonth).toBe('2026-09');
   });
 
   it('restores into the original month after switching months', () => {
     const before = state();
-    const entry = before.months['2026-09'].log[0];
-    let next = reducer(before, { type: 'deleteLog', id: entry.id });
-    next = reducer(next, { type: 'selectMonth', key: '2026-08' });
-    next = reducer(next, { type: 'restoreLog', month: '2026-09', entry, index: 0 });
-    expect(next.months['2026-09'].log).toEqual(before.months['2026-09'].log);
-    expect(next.months['2026-08'].log).toEqual([]);
+    const { plan } = roundTrip(before, { type: 'deleteLog', id: 'e1' });
+    const moved = reducer(plan.after, { type: 'selectMonth', key: '2026-08' });
+    const back = reducer(moved, plan.undo);
+    expect(back.months['2026-09'].log).toEqual(before.months['2026-09'].log);
+    expect(back.months['2026-08'].log).toEqual([]);
+    expect(back.activeMonth).toBe('2026-08');
   });
 
-  it('ignores a restore into a month that is gone', () => {
-    const gone = reducer(state(), { type: 'deleteMonth' });
-    const entry = state().months['2026-09'].log[0];
-    expect(reducer(gone, { type: 'restoreLog', month: '2026-09', entry, index: 0 })).toBe(gone);
+  it('does nothing when the month is gone', () => {
+    const { plan } = roundTrip(state(), { type: 'deleteLog', id: 'e1' });
+    const gone = reducer(plan.after, { type: 'deleteMonth' });
+    expect(reducer(gone, plan.undo)).toBe(gone);
+  });
+
+  it('keeps edits made after the action', () => {
+    const { plan } = roundTrip(state(), { type: 'deleteLog', id: 'e2' });
+    const edited = reducer(plan.after, { type: 'addCheck', date: '2026-09-14', amount: 100 });
+    const back = reducer(edited, plan.undo);
+    expect(back.months['2026-09'].log.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
+    expect(back.months['2026-09'].checks.some((c) => c.date === '2026-09-14')).toBe(true);
+  });
+
+  it('undoes an add that merged into an existing entry', () => {
+    const before = state();
+    const { plan, back } = roundTrip(before, { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: 'entry-2' });
+    expect(plan.after.months['2026-09'].log).toHaveLength(3);
+    expect(plan.after.months['2026-09'].log[1].amount).toBe(320);
+    expect(back.months['2026-09'].log).toEqual(before.months['2026-09'].log);
+  });
+
+  it('undoes an income add, including its share to savings', () => {
+    const { plan, back } = roundTrip(state(), {
+      type: 'addIncome', name: 'x', amount: 500, date: '2026-09-15', repeat: false, toSavings: 300
+    });
+    expect(plan.after.months['2026-09'].savingsTarget).toBe(2300);
+    expect(back.months['2026-09'].incomes.map((x) => x.id)).toEqual(['I', 'X', 'R1']);
+    expect(back.months['2026-09'].savingsTarget).toBe(2000);
+  });
+
+  it('brings back a deleted loan with its repayments in every month', () => {
+    const before = state();
+    const { plan, back } = roundTrip(before, { type: 'deleteLoan', id: 'L1' });
+    expect(plan.after.months['2026-08'].incomes).toEqual([]);
+    expect(plan.after.months['2026-09'].incomes.some((x) => x.loanId)).toBe(false);
+    expect(back.months['2026-09'].loans).toEqual(before.months['2026-09'].loans);
+    expect(back.months['2026-09'].incomes).toEqual(before.months['2026-09'].incomes);
+    expect(back.months['2026-08'].incomes).toEqual(before.months['2026-08'].incomes);
+  });
+
+  it('is not refused by a lock', () => {
+    const before = state();
+    const { plan } = roundTrip(before, { type: 'deleteLine', cat: 'needs', id: 'A' });
+    const locked = reducer(plan.after, { type: 'setLocked', value: true });
+    const back = reducer(locked, plan.undo);
+    expect(back.months['2026-09'].budget.needs).toEqual(before.months['2026-09'].budget.needs);
+  });
+
+  it('offers no undo for a refused action', () => {
+    expect(undoable(state(), { type: 'deleteLog', id: 'missing' })).toBeNull();
   });
 });
 
@@ -686,14 +741,6 @@ describe('updateLog', () => {
   it('refuses a zero amount', () => {
     const s = state();
     expect(reducer(s, { type: 'updateLog', id: 'e2', date: '2026-09-15', cat: 'wants', amount: 0, pick: '', name: '' })).toBe(s);
-  });
-
-  it('undoes an add that merged into an existing entry', () => {
-    const before = state();
-    const m = before.months['2026-09'];
-    const added = reducer(before, { type: 'addSpend', date: '2026-09-15', cat: 'wants', amount: 20, pick: '', name: 'entry-2' });
-    const back = reducer(added, { type: 'restoreLogList', month: '2026-09', log: m.log, loggedDays: m.loggedDays });
-    expect(back).toEqual(before);
   });
 });
 
@@ -788,25 +835,6 @@ describe('loans', () => {
     expect(state.months['2026-09'].loans).toHaveLength(1);
     const add = { type: 'addIncome', name: '', amount: 100, date: '2026-09-15', repeat: false, toSavings: 0, loanId: 'L1' } as const;
     expect(reducer(state, add)).toBe(state);
-  });
-
-  it('undoes an income add, including its share to savings', () => {
-    const state = stateWith(september());
-    const added = reducer(state, {
-      type: 'addIncome', id: 'N1', name: 'x', amount: 500, date: '2026-09-15', repeat: false, toSavings: 300
-    });
-    expect(added.months['2026-09'].savingsTarget).toBe(2300);
-    const undone = reducer(added, { type: 'undoIncome', month: '2026-09', id: 'N1', toSavings: 300 });
-    expect(undone.months['2026-09'].incomes).toHaveLength(1);
-    expect(undone.months['2026-09'].savingsTarget).toBe(2000);
-  });
-
-  it('deletes and restores a loan', () => {
-    let state = reducer(stateWith(september()), { type: 'addLoan', loan: lend('spend') });
-    state = reducer(state, { type: 'deleteLoan', id: 'L1' });
-    expect(state.months['2026-09'].loans).toHaveLength(0);
-    state = reducer(state, { type: 'restoreLoan', month: '2026-09', loan: lend('spend'), index: 0 });
-    expect(state.months['2026-09'].loans).toHaveLength(1);
   });
 
   it('deletes a loan together with its repayments in every month', () => {

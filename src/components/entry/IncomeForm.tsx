@@ -1,17 +1,17 @@
 import { useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { defaultDateIn, uid } from '@/lib/dates';
+import { defaultDateIn } from '@/lib/dates';
 import { money } from '@/lib/format';
 import { loanBook, loanName, repaymentFor, type Month } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 import { AmountInput, chip, chipOff, chipOn, DatePick, entryDate, useEntryDates } from './fields';
 
 /* A locked plan takes no new income, but money it already expects can still arrive. */
 export function LockedIncome({ m }: { m: Month }) {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const waiting = m.incomes.filter((x) => x.date == null);
   const when = defaultDateIn(state.activeMonth);
   return (
@@ -27,8 +27,7 @@ export function LockedIncome({ m }: { m: Month }) {
                 size="sm"
                 className="rounded-lg"
                 onClick={() => {
-                  dispatch({ type: 'receiveIncome', id: x.id, date: when });
-                  undoToast(money(x.amount) + ' এসেছে।', () => dispatch({ type: 'receiveIncome', id: x.id, date: null }));
+                  run({ type: 'receiveIncome', id: x.id, date: when }, money(x.amount) + ' এসেছে।');
                 }}
               >
                 এলো
@@ -45,7 +44,8 @@ export function LockedIncome({ m }: { m: Month }) {
 }
 
 export function IncomeForm({ onDone }: { onDone?: () => void }) {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const range = useEntryDates();
   const { open } = loanBook(state);
   const [loanId, setLoanId] = useState<string | null>(null);
@@ -63,9 +63,10 @@ export function IncomeForm({ onDone }: { onDone?: () => void }) {
     e.preventDefault();
     const when = entryDate(state, amt, date, 'কত টাকা এলো লেখো।', amountRef);
     if (!when) return;
-    const id = uid();
-    dispatch({ type: 'addIncome', id, name, amount: amt, date: when, repeat: loanId ? false : repeat, toSavings, ...(loanId ? { loanId } : {}) });
-    undoToast(money(amt) + ' আয় যোগ হয়েছে।', () => dispatch({ type: 'undoIncome', month: when.slice(0, 7), id, toSavings }));
+    run(
+      { type: 'addIncome', name, amount: amt, date: when, repeat: loanId ? false : repeat, toSavings, ...(loanId ? { loanId } : {}) },
+      money(amt) + ' আয় যোগ হয়েছে।'
+    );
     setAmount(null);
     setName('');
     setShare('none');

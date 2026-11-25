@@ -5,9 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { money } from '@/lib/format';
 import { CATEGORIES, type CatKey, type Derived, type LogEntry, type Month } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 import { AmountInput, chip, chipOff, chipOn, DatePick, entryDate, lastCategory, rememberCategory, useEntryDates } from './fields';
 
 /* A spend picks a plan line; this marks the free-text fallback. */
@@ -21,6 +20,7 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
   onDelete?: () => void;
 }) {
   const { state, dispatch } = useStore();
+  const run = useUndoable();
   const range = useEntryDates();
   const [amount, setAmount] = useState<number | null>(entry ? entry.amount : null);
   const [cat, setCat] = useState<string>(entry ? entry.cat : lastCategory());
@@ -42,18 +42,14 @@ export function SpendForm({ m, d, onDone, entry, onDelete }: {
     e.preventDefault();
     const when = entryDate(state, amt, date, 'কত টাকা খরচ হলো লেখো।', amountRef);
     if (!when) return;
-    const key = when.slice(0, 7);
-    const target = state.months[key];
     const pickId = showName ? '' : pickValue;
     const label = showName ? name : '';
     if (entry) {
       dispatch({ type: 'updateLog', id: entry.id, date: when, cat, amount: amt, pick: pickId, name: label });
       toast.success('খরচ বদলানো হয়েছে।');
     } else {
-      const before = { log: target.log, loggedDays: target.loggedDays };
-      dispatch({ type: 'addSpend', date: when, cat, amount: amt, pick: pickId, name: label });
+      run({ type: 'addSpend', date: when, cat, amount: amt, pick: pickId, name: label }, money(amt) + ' খরচ লেখা হয়েছে।');
       rememberCategory(cat as CatKey);
-      undoToast(money(amt) + ' খরচ লেখা হয়েছে।', () => dispatch({ type: 'restoreLogList', month: key, ...before }));
       setAmount(null);
       setPick('');
       setName('');

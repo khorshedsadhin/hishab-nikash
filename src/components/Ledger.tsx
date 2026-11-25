@@ -4,20 +4,17 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money } from '@/lib/format';
 import { CATEGORIES, catLabel, deriveMonth, loanSourceLabel, loanTitle, type Loan, type LogEntry } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 import { SpendForm } from './entry/SpendForm';
 
 /* Spends and loans share one timeline; a loan opens the loan list rather than the spend editor. */
 export function Ledger({ log, loans = [], days, onLoans }: { log: LogEntry[]; loans?: Loan[]; days?: number; onLoans?: () => void }) {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const [editing, setEditing] = useState<LogEntry | null>(null);
 
   function remove(entry: LogEntry) {
-    const month = state.activeMonth;
-    const index = state.months[month].log.findIndex((e) => e.id === entry.id);
-    dispatch({ type: 'deleteLog', id: entry.id });
-    undoToast('খরচ মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreLog', month, entry, index }));
+    run({ type: 'deleteLog', id: entry.id }, 'খরচ মুছে ফেলা হয়েছে।');
     setEditing(null);
   }
 

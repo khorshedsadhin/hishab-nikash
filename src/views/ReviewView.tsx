@@ -11,9 +11,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { todayISO } from '@/lib/dates';
 import { dayLabel, money, monthLabel } from '@/lib/format';
 import { CATEGORIES, canClose, reconRows, savedTotal, type Derived, type Month } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 
 export function ReviewView({ m, d, onCloseMonth, onLoans }: { m: Month; d: Derived; onCloseMonth: (key: string) => void; onLoans: () => void }) {
   const { state, dispatch } = useStore();
@@ -200,7 +199,8 @@ function Figure({ label, value, dot, bad }: { label: string; value: string; dot?
 
 /* Mid-month check: does the cash in hand match the ledger? */
 function Reconcile({ m }: { m: Month }) {
-  const { state, dispatch } = useStore();
+  const { dispatch } = useStore();
+  const run = useUndoable();
   const [checkAmount, setCheckAmount] = useState<number | null>(null);
   const [checkDate, setCheckDate] = useState(todayISO());
   const amountRef = useRef<HTMLInputElement>(null);
@@ -218,11 +218,7 @@ function Reconcile({ m }: { m: Month }) {
   }
 
   function removeCheck(id: string) {
-    const month = state.activeMonth;
-    const index = m.checks.findIndex((c) => c.id === id);
-    const check = m.checks[index];
-    dispatch({ type: 'deleteCheck', id });
-    undoToast('মিলানো মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreCheck', month, check, index }));
+    run({ type: 'deleteCheck', id }, 'মিলানো মুছে ফেলা হয়েছে।');
   }
 
   return (

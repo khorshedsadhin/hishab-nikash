@@ -1,14 +1,15 @@
-import { createContext, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, type Dispatch, type ReactNode } from 'react';
 import { nextMonthKey, todayISO, uid } from '@/lib/dates';
 import {
-  blankMonth, canEdit, closePlan, expectedAt, makeNewMonth, migrate,
-  type Check, type EditKind, type CloseInput, type Income, type Line, type Loan, type LogEntry, type Month, type State
+  applyInverse, blankMonth, canEdit, closePlan, expectedAt, inverseOf, makeNewMonth, migrate,
+  type EditKind, type CloseInput, type Loan, type Month, type State, type UndoStep
 } from '@/lib/model';
 import { load, save } from '@/lib/storage';
 import { startSync, trackState } from '@/lib/sync';
+import { undoToast } from '@/lib/undo';
 
 export type Action =
-  | { type: 'addSpend'; date: string; cat: string; amount: number; pick: string; name: string }
+  | { type: 'addSpend'; id?: string; date: string; cat: string; amount: number; pick: string; name: string }
   | { type: 'addCheck'; date: string; amount: number }
   | { type: 'updateLog'; id: string; date: string; cat: string; amount: number; pick: string; name: string }
   | { type: 'deleteLog'; id: string }
@@ -16,15 +17,12 @@ export type Action =
   | { type: 'markZeroDay' }
   | { type: 'fillGap'; checkId: string }
   | { type: 'addIncome'; id?: string; name: string; amount: number; date: string | null; repeat: boolean; toSavings: number; loanId?: string }
-  | { type: 'undoIncome'; month: string; id: string; toSavings: number }
   | { type: 'addLoan'; loan: Loan }
   | { type: 'deleteLoan'; id: string }
-  | { type: 'restoreLoan'; month: string; loan: Loan; index: number }
   | { type: 'updateIncome'; id: string; name?: string; amount?: number }
   | { type: 'receiveIncome'; id: string; date: string | null }
   | { type: 'toggleIncomeRepeat'; id: string }
   | { type: 'deleteIncome'; id: string }
-  | { type: 'restoreIncome'; month: string; income: Income; index: number }
   | { type: 'closeMonth'; month: string; input: CloseInput; reflection: string }
   | { type: 'reopenMonth' }
   | { type: 'setSavingsTarget'; value: number }
@@ -40,11 +38,7 @@ export type Action =
   | { type: 'openNextMonth' }
   | { type: 'importState'; state: State }
   | { type: 'deleteMonth' }
-  | { type: 'restoreLog'; month: string; entry: LogEntry; index: number }
-  | { type: 'restoreLogList'; month: string; log: LogEntry[]; loggedDays: string[] }
-  | { type: 'restoreCheck'; month: string; check: Check; index: number }
-  | { type: 'restoreLine'; month: string; cat: string; line: Line; index: number }
-  | { type: 'restoreMonth'; key: string; month: Month }
+  | { type: 'undo'; steps: UndoStep[] }
   | { type: 'mergeRemote'; months: Record<string, Month | null> };
 
 /* Every action names its edit kind, so a new action cannot skip the lock by mistake.
@@ -80,14 +74,7 @@ const EDIT_KIND: Record<Action['type'], EditKind | null> = {
   deleteMonth: null,
   importState: null,
   mergeRemote: null,
-  undoIncome: null,
-  restoreLoan: null,
-  restoreIncome: null,
-  restoreLog: null,
-  restoreLogList: null,
-  restoreCheck: null,
-  restoreLine: null,
-  restoreMonth: null
+  undo: null
 };
 
 /* The month an action lands in: the active month, unless the action carries its own date. */
@@ -125,6 +112,8 @@ function markLogged(m: Month, date: string) {
 
 export function reducer(prev: State, action: Action): State {
   if (action.type === 'importState') return migrate(action.state);
+  /* Undo only puts back an earlier state, so the month policy does not apply. */
+  if (action.type === 'undo') return applyInverse(prev, action.steps);
   if (action.type === 'mergeRemote') {
     const state: State = { ...prev, months: { ...prev.months } };
     for (const k in action.months) {
@@ -162,7 +151,7 @@ export function reducer(prev: State, action: Action): State {
         e.name.trim().toLowerCase() === name.trim().toLowerCase()
       );
       if (same) same.amount += action.amount;
-      else target.log.push({ id: uid(), date: action.date, name, cat: action.cat, amount: action.amount, lineId });
+      else target.log.push({ id: action.id ?? uid(), date: action.date, name, cat: action.cat, amount: action.amount, lineId });
       markLogged(target, action.date);
       break;
     }
@@ -226,12 +215,6 @@ export function reducer(prev: State, action: Action): State {
       });
       break;
     }
-    case 'restoreLoan': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.loans.splice(action.index, 0, action.loan);
-      break;
-    }
     case 'addIncome': {
       const target = action.date ? state.months[action.date.slice(0, 7)] : m;
       if (!target) return prev;
@@ -245,15 +228,6 @@ export function reducer(prev: State, action: Action): State {
         ...(action.loanId ? { loanId: action.loanId } : {})
       });
       if (action.toSavings > 0) target.savingsTarget += Math.min(action.toSavings, action.amount);
-      break;
-    }
-    /* Undo of an add: takes the income out again and gives back the share that went to savings. */
-    case 'undoIncome': {
-      const target = state.months[action.month];
-      const income = target?.incomes.find((x) => x.id === action.id);
-      if (!target || !income) return prev;
-      target.incomes = target.incomes.filter((x) => x.id !== action.id);
-      target.savingsTarget = Math.max(0, target.savingsTarget - Math.min(action.toSavings, income.amount));
       break;
     }
     case 'updateIncome': {
@@ -277,12 +251,6 @@ export function reducer(prev: State, action: Action): State {
     case 'deleteIncome':
       m.incomes = m.incomes.filter((x) => x.id !== action.id);
       break;
-    case 'restoreIncome': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.incomes.splice(action.index, 0, action.income);
-      break;
-    }
     /* Closing writes the month's last facts and starts the next month from the counted cash. */
     case 'closeMonth': {
       const target = state.months[action.month];
@@ -353,37 +321,6 @@ export function reducer(prev: State, action: Action): State {
     case 'deleteMonth':
       dropMonth(state, state.activeMonth);
       break;
-    /* Undo targets the month the item came from; the active month may have changed since. */
-    case 'restoreLog': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.log.splice(action.index, 0, action.entry);
-      break;
-    }
-    /* Undo of an add: the add may have merged into an existing entry, so the list comes back whole. */
-    case 'restoreLogList': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.log = action.log;
-      target.loggedDays = action.loggedDays;
-      break;
-    }
-    case 'restoreCheck': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.checks.splice(action.index, 0, action.check);
-      break;
-    }
-    case 'restoreLine': {
-      const target = state.months[action.month];
-      if (!target) return prev;
-      target.budget[action.cat].splice(action.index, 0, action.line);
-      break;
-    }
-    case 'restoreMonth':
-      state.months[action.key] = action.month;
-      state.activeMonth = action.key;
-      break;
     case 'openNextMonth': {
       const nextKey = nextMonthKey(state.activeMonth);
       if (!state.months[nextKey]) state.months[nextKey] = makeNewMonth(m);
@@ -415,4 +352,37 @@ export function useStore() {
   const ctx = useContext(StoreContext);
   if (!ctx) throw new Error('useStore outside StoreProvider');
   return ctx;
+}
+
+/* Fixes the ids an action would otherwise pick inside the reducer, so the dry run
+   that builds the inverse and the real dispatch create the same items. */
+function withIds(action: Action): Action {
+  if ((action.type === 'addSpend' || action.type === 'addIncome') && !action.id) return { ...action, id: uid() };
+  return action;
+}
+
+/* Dry-runs an action and builds the undo for it. Null when the action changes nothing. */
+export function undoable(before: State, action: Action): { action: Action; after: State; undo: Action } | null {
+  const run = withIds(action);
+  const after = reducer(before, run);
+  const steps = after === before ? [] : inverseOf(before, after);
+  if (!steps.length) return null;
+  return { action: run, after, undo: { type: 'undo', steps } };
+}
+
+/* Runs an action and offers a 5-second undo that takes back exactly what it changed. */
+export function useUndoable() {
+  const { state, dispatch } = useStore();
+  const latest = useRef(state);
+  latest.current = state;
+  return useCallback(
+    (action: Action, text: string) => {
+      const plan = undoable(latest.current, action);
+      if (!plan) return;
+      dispatch(plan.action);
+      latest.current = plan.after;
+      undoToast(text, () => dispatch(plan.undo));
+    },
+    [dispatch]
+  );
 }

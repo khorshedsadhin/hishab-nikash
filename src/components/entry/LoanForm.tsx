@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { uid } from '@/lib/dates';
 import { money } from '@/lib/format';
 import { LOAN_SOURCES, type Derived, type LoanSource } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 import { AmountInput, chip, chipOff, chipOn, DatePick, entryDate, useEntryDates } from './fields';
 
 /* Lending out: the money leaves either the spendable pool or the savings, never both. */
 export function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const range = useEntryDates();
   const [amount, setAmount] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -32,8 +32,7 @@ export function LoanForm({ d, onDone }: { d: Derived; onDone?: () => void }) {
       return;
     }
     const loan = { id: uid(), date: when, name, amount: amt, from };
-    dispatch({ type: 'addLoan', loan });
-    undoToast(money(amt) + ' ধার লেখা হয়েছে।', () => dispatch({ type: 'deleteLoan', id: loan.id }));
+    run({ type: 'addLoan', loan }, money(amt) + ' ধার লেখা হয়েছে।');
     setAmount(null);
     setName('');
     if (onDone) onDone();

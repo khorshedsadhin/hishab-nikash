@@ -701,3 +701,145 @@ export function streak(state: State): { text: string; warn: boolean } {
   if (gap <= 0) return { text: 'আজকের হিসাব লেখা হয়েছে।', warn: false };
   return { text: 'শেষ লেখা ' + toBn(gap) + ' দিন আগে · ' + dayLabel(last), warn: gap > 2 };
 }
+
+/* Lists inside a month that undo works on; a plan line list is `budget:<cat>`. */
+export type ListKey = 'log' | 'checks' | 'incomes' | 'loans' | `budget:${string}`;
+
+type Item = { id: string };
+
+/* One item-level step that takes an edit back. Steps never carry a whole month,
+   except to bring back a deleted one. */
+export type UndoStep =
+  | { op: 'insert'; month: string; list: ListKey; index: number; item: Item }
+  | { op: 'remove'; month: string; list: ListKey; id: string }
+  | { op: 'patch'; month: string; list: ListKey; id: string; fields: Record<string, unknown> }
+  | { op: 'unmark'; month: string; date: string }
+  | { op: 'savings'; month: string; by: number }
+  | { op: 'field'; month: string; key: string; value: unknown }
+  | { op: 'month'; key: string; value: Month };
+
+function listKeys(m: Month): ListKey[] {
+  return ['log', 'checks', 'incomes', 'loans', ...Object.keys(m.budget).map((c) => `budget:${c}` as ListKey)];
+}
+
+function listOf(m: Month, list: ListKey): Item[] {
+  if (list.startsWith('budget:')) {
+    const cat = list.slice(7);
+    if (!m.budget[cat]) m.budget[cat] = [];
+    return m.budget[cat];
+  }
+  const key = list as 'log' | 'checks' | 'incomes' | 'loans';
+  if (!m[key]) m[key] = [];
+  return m[key];
+}
+
+function readList(m: Month, list: ListKey): Item[] {
+  if (list.startsWith('budget:')) return m.budget[list.slice(7)] || [];
+  return m[list as 'log' | 'checks' | 'incomes' | 'loans'] || [];
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+function diffList(month: string, list: ListKey, before: Item[], after: Item[]): UndoStep[] {
+  const removes: UndoStep[] = [];
+  const patches: UndoStep[] = [];
+  const inserts: UndoStep[] = [];
+  const was = new Map(before.map((x) => [x.id, x]));
+  const now = new Map(after.map((x) => [x.id, x]));
+  for (const x of after) {
+    const old = was.get(x.id);
+    if (!old) {
+      removes.push({ op: 'remove', month, list, id: x.id });
+      continue;
+    }
+    const fields: Record<string, unknown> = {};
+    const keys = new Set([...Object.keys(old), ...Object.keys(x)]);
+    for (const k of keys) {
+      const a = (old as Record<string, unknown>)[k];
+      if (!same(a, (x as Record<string, unknown>)[k])) fields[k] = a;
+    }
+    if (Object.keys(fields).length) patches.push({ op: 'patch', month, list, id: x.id, fields });
+  }
+  before.forEach((x, index) => {
+    if (!now.has(x.id)) inserts.push({ op: 'insert', month, list, index, item: x });
+  });
+  return [...removes, ...patches, ...inserts];
+}
+
+const LIST_FIELDS = new Set(['log', 'checks', 'incomes', 'loans', 'budget', 'loggedDays', 'savingsTarget']);
+
+function diffMonth(key: string, before: Month, after: Month): UndoStep[] {
+  const steps: UndoStep[] = [];
+  const lists = new Set([...listKeys(before), ...listKeys(after)]);
+  for (const list of lists) {
+    steps.push(...diffList(key, list, readList(before, list), readList(after, list)));
+  }
+  const had = new Set(before.loggedDays || []);
+  for (const date of after.loggedDays || []) if (!had.has(date)) steps.push({ op: 'unmark', month: key, date });
+  /* A shift, not a set, so a target edit made after the action survives the undo. */
+  if (before.savingsTarget !== after.savingsTarget) {
+    steps.push({ op: 'savings', month: key, by: before.savingsTarget - after.savingsTarget });
+  }
+  for (const k of Object.keys(before) as (keyof Month)[]) {
+    if (LIST_FIELDS.has(k)) continue;
+    if (!same(before[k], after[k])) steps.push({ op: 'field', month: key, key: k, value: before[k] });
+  }
+  return steps;
+}
+
+/* The steps that take `after` back to `before`, built item by item. */
+export function inverseOf(before: State, after: State): UndoStep[] {
+  const steps: UndoStep[] = [];
+  for (const key of Object.keys(before.months)) {
+    const a = after.months[key];
+    if (!a) steps.push({ op: 'month', key, value: before.months[key] });
+    else if (a !== before.months[key]) steps.push(...diffMonth(key, before.months[key], a));
+  }
+  return steps;
+}
+
+/* Applies an inverse. If a month it needs is gone, nothing changes and the same state comes back. */
+export function applyInverse(prev: State, steps: UndoStep[]): State {
+  if (steps.some((s) => s.op !== 'month' && !prev.months[s.month])) return prev;
+  const state: State = structuredClone(prev);
+  for (const s of steps) {
+    if (s.op === 'month') {
+      state.months[s.key] = structuredClone(s.value);
+      state.activeMonth = s.key;
+      continue;
+    }
+    const m = state.months[s.month];
+    switch (s.op) {
+      case 'insert': {
+        const list = listOf(m, s.list);
+        if (!list.some((x) => x.id === s.item.id)) list.splice(s.index, 0, structuredClone(s.item));
+        break;
+      }
+      case 'remove': {
+        const list = listOf(m, s.list);
+        const i = list.findIndex((x) => x.id === s.id);
+        if (i >= 0) list.splice(i, 1);
+        break;
+      }
+      case 'patch': {
+        const item = listOf(m, s.list).find((x) => x.id === s.id) as Record<string, unknown> | undefined;
+        if (!item) break;
+        for (const [k, v] of Object.entries(s.fields)) {
+          if (v === undefined) delete item[k];
+          else item[k] = structuredClone(v);
+        }
+        break;
+      }
+      case 'unmark':
+        m.loggedDays = (m.loggedDays || []).filter((d) => d !== s.date);
+        break;
+      case 'savings':
+        m.savingsTarget = Math.max(0, m.savingsTarget + s.by);
+        break;
+      case 'field':
+        (m as unknown as Record<string, unknown>)[s.key] = structuredClone(s.value);
+        break;
+    }
+  }
+  return state;
+}

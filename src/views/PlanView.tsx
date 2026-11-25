@@ -12,14 +12,14 @@ import { MonthPicker, PageHeader } from '@/components/layout/PageHeader';
 import { defaultDateIn, prevMonthKey, uid } from '@/lib/dates';
 import { money, monthLabel, shortDay, toBn } from '@/lib/format';
 import { CATEGORIES, carryInto, loanSourceLabel, type Derived, type Income, type Month } from '@/lib/model';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 
 const ghostInput = 'h-9 border-transparent bg-transparent shadow-none hover:border-input focus-visible:border-input dark:bg-transparent disabled:cursor-default disabled:opacity-100';
 
 export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () => void }) {
   const { state, dispatch } = useStore();
+  const run = useUndoable();
   const [newLineId, setNewLineId] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const locked = m.locked;
@@ -178,12 +178,7 @@ export function PlanView({ m, d, onLoans }: { m: Month; d: Derived; onLoans: () 
                           className="text-muted-foreground hover:text-danger"
                           aria-label="মুছে ফেলো"
                           onClick={() => {
-                            const month = state.activeMonth;
-                            const index = m.budget[c.key].indexOf(l);
-                            dispatch({ type: 'deleteLine', cat: c.key, id: l.id });
-                            undoToast('লাইন মুছে ফেলা হয়েছে।', () =>
-                              dispatch({ type: 'restoreLine', month, cat: c.key, line: l, index })
-                            );
+                            run({ type: 'deleteLine', cat: c.key, id: l.id }, 'লাইন মুছে ফেলা হয়েছে।');
                           }}
                         >
                           <X />
@@ -284,13 +279,11 @@ function Op({ children }: { children: ReactNode }) {
 /* Income lines: expected ones wait for a tap when the money actually arrives. */
 function Incomes({ m, d, locked }: { m: Month; d: Derived; locked: boolean }) {
   const { state, dispatch } = useStore();
+  const run = useUndoable();
   const [newId, setNewId] = useState<string | null>(null);
 
   function remove(x: Income) {
-    const month = state.activeMonth;
-    const index = m.incomes.indexOf(x);
-    dispatch({ type: 'deleteIncome', id: x.id });
-    undoToast('আয় মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreIncome', month, income: x, index }));
+    run({ type: 'deleteIncome', id: x.id }, 'আয় মুছে ফেলা হয়েছে।');
   }
 
   return (

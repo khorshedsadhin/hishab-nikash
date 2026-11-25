@@ -16,9 +16,8 @@ import { type State } from '@/lib/model';
 import { exportData, parseImport } from '@/lib/storage';
 import { getStatus, subscribe } from '@/lib/sync';
 import { setTheme, useTheme } from '@/lib/theme';
-import { undoToast } from '@/lib/undo';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/state/store';
+import { useStore, useUndoable } from '@/state/store';
 
 const row = 'flex min-h-14 w-full items-center gap-3 px-5 text-left text-[15px] hover:bg-muted/50';
 
@@ -197,7 +196,8 @@ function Backup() {
 }
 
 function DeleteMonth() {
-  const { state, dispatch } = useStore();
+  const { state } = useStore();
+  const run = useUndoable();
   const label = monthLabel(state.activeMonth);
 
   return (
@@ -220,10 +220,7 @@ function DeleteMonth() {
             <AlertDialogAction
               variant="destructive"
               onClick={() => {
-                const key = state.activeMonth;
-                const month = state.months[key];
-                dispatch({ type: 'deleteMonth' });
-                undoToast(label + ' মুছে ফেলা হয়েছে।', () => dispatch({ type: 'restoreMonth', key, month }));
+                run({ type: 'deleteMonth' }, label + ' মুছে ফেলা হয়েছে।');
               }}
             >
               হ্যাঁ, মুছে ফেলো
